@@ -277,14 +277,15 @@ const STATUS_DEFS = [
   { code:"5000", name:"Slow operation", split:"team", active:true },
   { code:"5010", name:"Testing", split:"team", active:true },
   { code:"5020", name:"Waiting Hand Over", split:"team", active:true },
-  { code:"5030", name:"Output", split:"team", active:true },
+  { code:"5030", name:"Hand over", split:"team", active:true },
   { code:"1", name:"Cancel project", split:"team", active:false },
   { code:"2", name:"Hold project", split:"team", active:false },
   { code:"9030", name:"Resale", split:"team", active:false },
   { code:"9040", name:"Raw suit", split:"team", active:false },
   { code:"9110", name:"Invoice", split:"team", active:false },
   { code:"7120", name:"Temp. HO before install", split:"team", active:false },
-  { code:"6120", name:"6120", split:"team", active:false },
+  { code:"6120", name:"Temporary Hand Over During Waiting Power Supply", split:"team", active:false },
+  { code:"6130", name:"Handover Contract Due", split:"team", active:false },
 ];
 const SPLIT_OPTIONS = {
   payment: [{key:"paid",label:"เงินผ่าน"},{key:"unpaid",label:"เงินยังไม่ผ่าน"}],
@@ -312,9 +313,10 @@ const FLOW_LAYOUT = {
   "9110": {x:324, y:210, w:56,  h:44},
   "7120": {x:394, y:210, w:56,  h:44},
   "6120": {x:464, y:210, w:56,  h:44},
+  "6130": {x:534, y:210, w:56,  h:44},
 };
 const ACTIVE_CHAIN = ["9010","9020","7010","6010","6020","5000","5010","5020"];
-const DEAD_END_PAIRS = [["9010","1"],["9010","2"],["9010","9030"],["9010","9040"],["9010","9110"],["7010","7120"],["6020","6120"]];
+const DEAD_END_PAIRS = [["9010","1"],["9010","2"],["9010","9030"],["9010","9040"],["9010","9110"],["7010","7120"],["6020","6120"],["6120","6130"]];
 const flowLabel = (code) => {
   const name = defByCode[code]?.name || code;
   return /^[0-9]+$/.test(name) ? code : `${code} · ${name}`;
@@ -376,7 +378,11 @@ function renderFlowDiagram(){
   });
   DEAD_END_PAIRS.forEach(([from, to]) => {
     const a = FLOW_LAYOUT[from], b = FLOW_LAYOUT[to];
-    structuralParts.push(`<path d="M${cx(a)} ${a.y + a.h}L${cx(b)} ${b.y}" fill="none" stroke="var(--rust)" stroke-width="1" stroke-dasharray="4 3" opacity="${dim}" marker-end="url(#flowArrowRed)"/>`);
+    const sameRow = a.y === b.y;
+    const d = sameRow
+      ? `M${a.x + a.w} ${cy(a)}L${b.x} ${cy(b)}`
+      : `M${cx(a)} ${a.y + a.h}L${cx(b)} ${b.y}`;
+    structuralParts.push(`<path d="${d}" fill="none" stroke="var(--rust)" stroke-width="1" stroke-dasharray="4 3" opacity="${dim}" marker-end="url(#flowArrowRed)"/>`);
   });
 
   const vr = visibleRows();
