@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>แม่แบบอัปโหลดข้อมูลหน่วย — Last week vs This week</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  :root{
+    --ink:#14181F; --paper:#F7F7F4; --paper-raised:#FFFFFF; --line:#E4E1D9;
+    --slate:#6B7280; --rail:#2F6F5E; --rail-soft:#E7F1EC;
+    --amber:#C98A1A; --amber-soft:#FBF0DC; --rust:#B54A32; --rust-soft:#F8E7E1;
+    --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:var(--font-body); padding:28px 20px 60px; }
+  .wrap{ max-width:1400px; margin:0 auto; }
+  .eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--slate); }
+  h1{ font-family:var(--font-display); font-weight:700; font-size:26px; margin:4px 0 2px; letter-spacing:-0.02em; }
+  .card{ background:var(--paper-raised); border:1px solid var(--line); border-radius:16px; padding:18px 20px; margin-bottom:20px; }
+  .note{ background:var(--rust-soft); color:var(--rust); border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:18px; }
+  .legend{ display:flex; flex-wrap:wrap; gap:8px 20px; font-size:12.5px; color:var(--slate); margin-top:6px; }
+  .legend b{ color:var(--ink); font-family:var(--font-mono); }
+  .toolbar{ display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  button{ font-family:var(--font-body); font-size:13px; font-weight:600; border-radius:9px; padding:9px 16px; cursor:pointer; border:1px solid var(--line); background:var(--paper-raised); color:var(--ink); }
+  button.primary{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  button.ghost{ background:transparent; }
+  button:hover{ opacity:.85; }
+  .table-scroll{ overflow-x:auto; border:1px solid var(--line); border-radius:14px; }
+  table{ border-collapse:collapse; width:100%; min-width:1900px; font-size:12.5px; }
+  thead th{ position:sticky; top:0; background:var(--ink); color:#fff; font-family:var(--font-mono); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; padding:9px 8px; text-align:left; white-space:nowrap; z-index:2; }
+  tbody td{ border-bottom:1px solid var(--line); padding:5px 6px; vertical-align:middle; }
+  tbody tr:nth-child(odd){ background:#fcfcfb; }
+  tbody tr.example-row{ background:#FFF6D8 !important; }
+  input, select{ font-family:var(--font-body); font-size:12.5px; padding:6px 7px; border:1px solid var(--line); border-radius:7px; width:100%; background:#fff; color:var(--ink); }
+  input:focus, select:focus{ outline:2px solid var(--rail); outline-offset:1px; }
+  td.flag{ background:var(--amber-soft); }
+  td.change-cell{ font-family:var(--font-mono); font-size:11.5px; color:var(--slate); min-width:220px; }
+  td.remove-cell{ text-align:center; }
+  .remove-btn{ border:none; background:transparent; color:var(--rust); font-size:15px; padding:2px 6px; cursor:pointer; }
+  .summary-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .summary-table th{ font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:var(--ink); padding:9px 10px; text-align:left; }
+  .summary-table td{ padding:9px 10px; border-bottom:1px solid var(--line); }
+  .summary-table tr.total td{ background:var(--rail-soft); font-weight:700; }
+  .num{ font-family:var(--font-mono); font-weight:700; text-align:center; }
+  .trend-up{ color:var(--rail); font-weight:600; }
+  .trend-down{ color:var(--rust); font-weight:600; }
+  .trend-flat{ color:var(--slate); }
+  .code-pill{ font-family:var(--font-mono); font-size:10.5px; background:var(--rail-soft); color:var(--rail); padding:2px 7px; border-radius:6px; }
+  .status-legend-item{ display:flex; gap:6px; align-items:baseline; }
+  .flow-filter-row{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .flow-pill{ font-family:var(--font-mono); font-size:11px; font-weight:600; padding:6px 11px; border-radius:999px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--ink); }
+  .flow-pill.is-active-status{ color:var(--rail); border-color:var(--rail-soft); }
+  .flow-pill.is-inactive-status{ color:var(--rust); border-color:var(--rust-soft); }
+  .flow-pill.is-selected{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  .flow-pill.is-clear{ background:var(--paper); color:var(--slate); }
+  .flow-summary-text{ margin-top:10px; font-size:12.5px; color:var(--ink); line-height:1.7; }
+  .flow-summary-text b{ font-family:var(--font-mono); }
+  .chart-point{ cursor:pointer; }
+  .chart-point:hover{ opacity:0.75; }
+  .chart-detail-list{ margin-top:14px; }
+  .chart-detail-header{ font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--ink); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .detail-table{ width:100%; border-collapse:collapse; font-size:12px; }
+  .detail-table th{ font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:#fff; background:var(--ink); padding:7px 8px; text-align:left; white-space:nowrap; }
+  .detail-table td{ padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .detail-table tr:nth-child(odd){ background:#fcfcfb; }
+  .chart-empty-hint{ font-size:12px; color:var(--slate); }
+  .movement-arrow{ stroke-dasharray:6 5; animation:flowDash 0.9s linear infinite; }
+  @keyframes flowDash{ to{ stroke-dashoffset:-22; } }
+  .active-plan-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
+  .active-plan-box{ border:1px solid var(--rail-soft); border-radius:12px; padding:12px 14px; background:#fcfefd; overflow:hidden; }
+  .active-plan-box-header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
+  .active-plan-box-total{ font-family:var(--font-mono); font-weight:700; font-size:18px; color:var(--rail); }
+  .active-plan-mgr-table{ width:100%; table-layout:fixed; border-collapse:collapse; font-size:11.5px; }
+  .active-plan-mgr-table td, .active-plan-mgr-table th{ word-break:break-word; overflow-wrap:break-word; }
+  .active-plan-mgr-table th{ text-align:left; color:var(--slate); font-weight:600; padding:3px 4px; border-bottom:1px solid var(--line); }
+  .active-plan-mgr-table td{ padding:3px 4px; border-bottom:1px solid var(--line); }
+  .active-plan-mgr-table tr.plan-total-row td{ font-weight:700; border-top:1px solid var(--ink); border-bottom:none; }
+  .active-plan-mgr-table tr.mgr-row{ cursor:pointer; }
+  .active-plan-mgr-table tr.mgr-row:hover{ background:var(--rail-soft); }
+  .active-plan-mgr-table tr.mgr-sub-row{ background:#fafaf9; }
+  .active-plan-mgr-table tr.mgr-sub-row td{ padding-top:2px; padding-bottom:2px; font-size:11px; }
+  .mgr-caret{ display:inline-block; width:12px; color:var(--slate); font-size:9px; }
+  .team-filter-row{ display:flex; gap:8px; align-items:center; margin:14px 0 18px; flex-wrap:wrap; }
+  .team-pill{ font-family:var(--font-mono); font-size:12px; font-weight:700; padding:7px 16px; border-radius:999px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--ink); }
+  .team-pill.is-selected{ background:var(--blue); color:#fff; border-color:var(--blue); }
+  .plan-card{ display:flex; gap:0; flex-wrap:wrap; align-items:stretch; border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+  .plan-cell{ flex:1; min-width:150px; padding:14px 16px; border-right:1px solid var(--line); }
+  .plan-cell:last-child{ border-right:none; }
+  .plan-cell input[type=number]{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--ink); border:none; background:transparent; width:100%; padding:0; }
+  .plan-cell input[type=number]:focus{ outline:none; }
+  .plan-big{ font-family:var(--font-mono); font-size:22px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">แม่แบบอัปโหลดข้อมูล (HTML)</div>
+  <h1>เทียบสถานะหน่วย — Last week vs This week</h1>
+
+  <div id="teamFilterButtons" class="team-filter-row"></div>
+
+  <div class="card" style="margin-top:16px;">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
+      <div class="eyebrow">เส้นทางการเปลี่ยนแปลงสถานะ (ซ้าย → ขวา) — คลิกปุ่มสถานะเพื่อดู Movement เข้า/ออก</div>
+      <div style="display:flex; gap:8px;">
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:var(--rail-soft);">
+          <span style="width:9px; height:9px; border-radius:999px; background:var(--rail);"></span>
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--rail);">Active Total: <b id="totalActiveUnits" style="font-size:13px;">0</b></span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:var(--rust-soft);">
+          <span style="width:9px; height:9px; border-radius:999px; background:var(--rust);"></span>
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--rust);">Inactive Total: <b id="totalInactiveUnits" style="font-size:13px;">0</b></span>
+        </div>
+      </div>
+    </div>
+    <div id="flowFilterButtons" class="flow-filter-row"></div>
+    <div style="overflow-x:auto;">
+      <div id="flowDiagramContainer" style="min-width:900px;"></div>
+    </div>
+    <div id="flowSummaryText" class="flow-summary-text"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="eyebrow" style="margin-bottom:2px;">จำนวน unit ต่อสถานะ: Last week vs This week</div>
+    <p style="font-size:12px; color:var(--slate); margin:0 0 8px;">คลิกที่จุดบนกราฟเพื่อดูรายชื่อ unit ของสถานะ/สัปดาห์นั้น</p>
+    <div style="overflow-x:auto;">
+      <div id="lineChartContainer" style="min-width:900px;"></div>
+    </div>
+    <div id="chartDetailList" class="chart-detail-list"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="eyebrow" style="margin-bottom:2px;">This week — แยกตามสถานะ Active: Have plan / No plan ตาม Manager</div>
+    <p style="font-size:12px; color:var(--slate); margin:0 0 10px;">นับจาก unit ที่ This week อยู่ในแต่ละสถานะ Active เชื่อมกับ Team filter ด้านบน</p>
+    <div id="activePlanSummaryGrid" class="active-plan-grid"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="note">
+      คอลัมน์ <b>601F</b> (พื้นหลังสีส้มในตาราง) ยังไม่ทราบความหมาย/รูปแบบข้อมูลที่แน่ชัด จึงใส่เป็นช่องข้อความว่างไว้ก่อน — แจ้งได้ว่าควรเป็นวันที่ ตัวเลข หรือ dropdown เพื่อปรับให้ถูกต้อง
+    </div>
+    <div class="eyebrow" style="margin-bottom:6px;">รหัสสถานะ และการแบ่งย่อย (เขียว = Active ไปต่อได้ · แดง = Inactive ไปต่อไม่ได้)</div>
+    <div class="legend" id="statusLegend"></div>
+  </div>
+
+  <div class="card" style="display:flex; gap:16px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:220px; padding:16px 18px; border-radius:12px; background:var(--rail-soft);">
+      <div class="eyebrow" style="color:var(--rail);">Input — New coming project</div>
+      <div id="kpiInputCount" style="font-family:var(--font-mono); font-size:34px; font-weight:700; color:var(--rail); margin-top:4px;">0</div>
+      <div style="font-size:11.5px; color:var(--slate); margin-top:2px;">นับจาก unit ที่ This week = 9010 และ Last week ว่าง/N/A</div>
+    </div>
+    <div style="flex:1; min-width:220px; padding:16px 18px; border-radius:12px; background:var(--rust-soft);">
+      <div class="eyebrow" style="color:var(--rust);">Output — 5030</div>
+      <div id="kpiOutputCount" style="font-family:var(--font-mono); font-size:34px; font-weight:700; color:var(--rust); margin-top:4px;">0</div>
+      <div style="font-size:11.5px; color:var(--slate); margin-top:2px;">นับจาก unit ที่ This week = 5030 (ไม่บังคับไล่ตามลำดับสถานะ)</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="eyebrow" style="margin-bottom:10px;">5030 · Output — Plan Apr'26 – Mar'27<span id="planTeamTag"></span></div>
+    <div class="plan-card">
+      <div class="plan-cell">
+        <div style="font-size:11px; color:var(--slate); margin-bottom:4px;">Plan (unit)</div>
+        <input type="number" id="planTargetInput" min="0" value="0"/>
+      </div>
+      <div class="plan-cell">
+        <div style="font-size:11px; color:var(--slate); margin-bottom:4px;">Actual (unit)</div>
+        <div class="plan-big" id="planActualCount" style="color:var(--rust);">0</div>
+      </div>
+      <div class="plan-cell">
+        <div style="font-size:11px; color:var(--slate); margin-bottom:4px;">% สำเร็จ</div>
+        <div class="plan-big" id="planPercent" style="color:var(--rail);">0%</div>
+      </div>
+      <div class="plan-cell" style="flex:1.6;">
+        <div style="font-size:11px; color:var(--slate); margin-bottom:4px;">เหลือเวลาถึง 31 Mar'27</div>
+        <div class="plan-big" id="planCountdown" style="font-size:16px;">—</div>
+      </div>
+    </div>
+    <div style="margin-top:10px; height:8px; border-radius:5px; background:var(--paper); overflow:hidden;">
+      <div id="planProgressBar" style="height:100%; width:0%; background:var(--rail); border-radius:5px;"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="eyebrow" style="margin-bottom:2px;">สรุปรายปีงบประมาณ (Fiscal Year: เริ่ม Apr จบ Mar)</div>
+    <p style="font-size:12px; color:var(--slate); margin:0 0 10px;">กด "บันทึก Input/Output สัปดาห์นี้" ทุกครั้งที่อัปเดตข้อมูลรายสัปดาห์ เพื่อสะสมประวัติเข้า-ออกไว้รายเดือน (บันทึกซ้ำวันเดิม = เขียนทับข้อมูลวันนั้น ไม่นับซ้ำ)</p>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+      <label style="font-size:12px; color:var(--slate);">วันที่ของสัปดาห์นี้:</label>
+      <input type="date" id="logDateInput"/>
+      <button class="primary" id="logWeekBtn">บันทึก Input/Output สัปดาห์นี้</button>
+      <span class="eyebrow" id="logCountLabel" style="margin-left:auto;"></span>
+    </div>
+    <div id="fiscalYearButtons" class="flow-filter-row"></div>
+    <div style="overflow-x:auto;">
+      <table class="summary-table" id="fiscalTable">
+        <thead>
+          <tr>
+            <th>เดือน</th>
+            <th style="text-align:center;">เข้า (เดือนนี้)</th><th style="text-align:center;">ออก (เดือนนี้)</th><th style="text-align:center;">สุทธิ</th>
+            <th style="text-align:center;">สะสมเข้า</th><th style="text-align:center;">สะสมออก</th><th style="text-align:center;">สุทธิสะสม</th>
+          </tr>
+        </thead>
+        <tbody id="fiscalBody"></tbody>
+      </table>
+    </div>
+    <div id="fiscalCumulativeNote" class="flow-summary-text"></div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <button class="primary" id="addRowBtn">+ เพิ่มแถว (unit)</button>
+      <button id="exportCsvBtn">ดาวน์โหลด CSV</button>
+      <button id="exportJsonBtn">ดาวน์โหลด JSON</button>
+      <span style="width:1px; height:22px; background:var(--line);"></span>
+      <button id="uploadCsvBtn">⬆ อัปโหลด CSV</button>
+      <input type="file" id="uploadCsvInput" accept=".csv" style="display:none;"/>
+      <label style="display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--slate); cursor:pointer;">
+        <input type="checkbox" id="importReplaceCheckbox"/> แทนที่ข้อมูลเดิมทั้งหมด
+      </label>
+      <span class="eyebrow" id="rowCountLabel" style="margin-left:auto;"></span>
+    </div>
+    <div id="importStatusLabel" style="font-size:11.5px; color:var(--rail); margin:-6px 0 8px;"></div>
+    <div class="table-scroll">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th>WBS.LV.4</th>
+            <th>Project name</th>
+            <th>Team</th>
+            <th>Manager</th>
+            <th>Co</th>
+            <th>Subcontractor</th>
+            <th>Plan</th>
+            <th>สถานะ Payment</th>
+            <th>RV shipment</th>
+            <th>Onsite date</th>
+            <th>601F</th>
+            <th>รหัสสถานะ (Last week)</th>
+            <th>รายละเอียด (Last week)</th>
+            <th>รหัสสถานะ (This week)</th>
+            <th>รายละเอียด (This week)</th>
+            <th>การเปลี่ยนแปลง</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="dataBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow" style="margin-bottom:2px;">สรุปจำนวน unit ต่อสถานะ: สัปดาห์ที่แล้ว เทียบกับ สัปดาห์นี้</div>
+    <p style="font-size:12px; color:var(--slate); margin:0 0 10px;">เข้า (In) = unit ที่ย้ายเข้าสถานะนี้ในสัปดาห์นี้ (ไม่นับที่คงอยู่เดิม) &nbsp;·&nbsp; ออก (Out) = unit ที่เคยอยู่สถานะนี้สัปดาห์ที่แล้วแล้วย้ายออกไปสถานะอื่น</p>
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>รหัสสถานะ</th><th>ชื่อสถานะ</th>
+          <th style="text-align:center;">สัปดาห์ที่แล้ว</th><th style="text-align:center;">สัปดาห์นี้</th>
+          <th style="text-align:center;">เข้า (In)</th><th style="text-align:center;">ออก (Out)</th>
+          <th style="text-align:center;">ผลต่าง (Δ)</th><th>การเคลื่อนไหว</th>
+        </tr>
+      </thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const STATUS_DEFS = [
+  { code:"9010", name:"Manufacturing", split:"payment", active:true },
+  { code:"9020", name:"Inventory", split:"payment", active:true },
+  { code:"7010", name:"Onsite", split:"site", active:true },
+  { code:"6010", name:"Installation", split:"plan", active:true },
+  { code:"6020", name:"Waiting power supply", split:"team", active:true },
+  { code:"5000", name:"Slow operation", split:"team", active:true },
+  { code:"5010", name:"Testing", split:"team", active:true },
+  { code:"5020", name:"Waiting Hand Over", split:"team", active:true },
+  { code:"5030", name:"Output", split:"team", active:true },
+  { code:"1", name:"Cancel project", split:"team", active:false },
+  { code:"2", name:"Hold project", split:"team", active:false },
+  { code:"9030", name:"Resale", split:"team", active:false },
+  { code:"9040", name:"Raw suit", split:"team", active:false },
+  { code:"9110", name:"Invoice", split:"team", active:false },
+  { code:"7120", name:"Temp. HO before install", split:"team", active:false },
+  { code:"6120", name:"6120", split:"team", active:false },
+];
+const SPLIT_OPTIONS = {
+  payment: [{key:"paid",label:"เงินผ่าน"},{key:"unpaid",label:"เงินยังไม่ผ่าน"}],
+  site: [{key:"ready",label:"บ่อพร้อมติดตั้ง"},{key:"not_ready",label:"บ่อไม่พร้อมติดตั้ง"}],
+  plan: [{key:"onplan",label:"Onplan"},{key:"delay",label:"Delay plan"}],
+  team: null,
+};
+const defByCode = Object.fromEntries(STATUS_DEFS.map(d => [d.code, d]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+// ---- Flow diagram layout (matches the confirmed active/inactive pipeline) ----
+const FLOW_LAYOUT = {
+  "9010": {x:44,  y:90,  w:62,  h:44},
+  "9020": {x:120, y:90,  w:62,  h:44},
+  "7010": {x:196, y:90,  w:62,  h:44},
+  "6010": {x:272, y:90,  w:62,  h:44},
+  "6020": {x:348, y:90,  w:62,  h:44},
+  "5000": {x:424, y:90,  w:62,  h:44},
+  "5010": {x:500, y:90,  w:62,  h:44},
+  "5020": {x:576, y:90,  w:62,  h:44},
+  "1":    {x:44,  y:210, w:56,  h:44},
+  "2":    {x:114, y:210, w:56,  h:44},
+  "9030": {x:184, y:210, w:56,  h:44},
+  "9040": {x:254, y:210, w:56,  h:44},
+  "9110": {x:324, y:210, w:56,  h:44},
+  "7120": {x:394, y:210, w:56,  h:44},
+  "6120": {x:464, y:210, w:56,  h:44},
+};
+const ACTIVE_CHAIN = ["9010","9020","7010","6010","6020","5000","5010","5020"];
+const DEAD_END_PAIRS = [["9010","1"],["9010","2"],["9010","9030"],["9010","9040"],["9010","9110"],["7010","7120"],["6020","6120"]];
+const flowLabel = (code) => {
+  const name = defByCode[code]?.name || code;
+  return /^[0-9]+$/.test(name) ? code : `${code} · ${name}`;
+};
+let selectedFlowStatus = null;
+
+function cx(pos){ return pos.x + pos.w / 2; }
+function cy(pos){ return pos.y + pos.h / 2; }
+
+function renderFlowFilterButtons(){
+  const box = document.getElementById("flowFilterButtons");
+  box.innerHTML = "";
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "flow-pill is-clear" + (selectedFlowStatus === null ? " is-selected" : "");
+  clearBtn.textContent = "แสดงทั้งหมด";
+  clearBtn.addEventListener("click", () => { selectedFlowStatus = null; renderFlowFilterButtons(); renderFlowDiagram(); });
+  box.appendChild(clearBtn);
+
+  STATUS_DEFS.forEach(d => {
+    const btn = document.createElement("button");
+    btn.className = "flow-pill " + (d.active ? "is-active-status" : "is-inactive-status") + (selectedFlowStatus === d.code ? " is-selected" : "");
+    btn.textContent = d.code;
+    btn.title = d.name;
+    btn.addEventListener("click", () => {
+      selectedFlowStatus = selectedFlowStatus === d.code ? null : d.code;
+      renderFlowFilterButtons(); renderFlowDiagram();
+    });
+    box.appendChild(btn);
+  });
+}
+
+function computeMovementDetail(code){
+  const inflow = {}; // sourceCode|__NEW__ -> count
+  const outflow = {}; // destCode -> count
+  visibleRows().forEach(r => {
+    if (r.twCode === code && r.lwCode !== code) {
+      const src = (r.lwCode && r.lwCode !== "") ? r.lwCode : "__NEW__";
+      inflow[src] = (inflow[src] || 0) + 1;
+    }
+    if (r.lwCode === code && r.twCode !== code && r.twCode) {
+      outflow[r.twCode] = (outflow[r.twCode] || 0) + 1;
+    }
+  });
+  return { inflow, outflow };
+}
+
+function renderFlowDiagram(){
+  const container = document.getElementById("flowDiagramContainer");
+  const selected = selectedFlowStatus;
+  const dim = selected ? 0.22 : 0.55;
+  const boxParts = [];
+  const structuralParts = [];
+  const movementParts = [];
+
+  ACTIVE_CHAIN.forEach((code, i) => {
+    if (i === ACTIVE_CHAIN.length - 1) return;
+    const a = FLOW_LAYOUT[code], b = FLOW_LAYOUT[ACTIVE_CHAIN[i + 1]];
+    structuralParts.push(`<line x1="${a.x + a.w}" y1="${cy(a)}" x2="${b.x}" y2="${cy(b)}" stroke="var(--ink)" stroke-width="1.3" opacity="${dim}" marker-end="url(#flowArrow)"/>`);
+  });
+  DEAD_END_PAIRS.forEach(([from, to]) => {
+    const a = FLOW_LAYOUT[from], b = FLOW_LAYOUT[to];
+    structuralParts.push(`<path d="M${cx(a)} ${a.y + a.h}L${cx(b)} ${b.y}" fill="none" stroke="var(--rust)" stroke-width="1" stroke-dasharray="4 3" opacity="${dim}" marker-end="url(#flowArrowRed)"/>`);
+  });
+
+  const vr = visibleRows();
+  const totalActive = vr.filter(r => r.twCode && defByCode[r.twCode] && defByCode[r.twCode].active).length;
+  const totalInactive = vr.filter(r => r.twCode && defByCode[r.twCode] && !defByCode[r.twCode].active).length;
+  const totalActiveEl = document.getElementById("totalActiveUnits");
+  const totalInactiveEl = document.getElementById("totalInactiveUnits");
+  if (totalActiveEl) totalActiveEl.textContent = totalActive;
+  if (totalInactiveEl) totalInactiveEl.textContent = totalInactive;
+
+  Object.entries(FLOW_LAYOUT).forEach(([code, pos]) => {
+    const def = defByCode[code];
+    const isSel = code === selected;
+    const pad = isSel ? 7 : 0;
+    const x = pos.x - pad, y = pos.y - pad, w = pos.w + pad * 2, h = pos.h + pad * 2;
+    const fill = def.active ? "var(--rail-soft)" : "var(--rust-soft)";
+    const stroke = def.active ? "var(--rail)" : "var(--rust)";
+    const strokeW = isSel ? 3 : 1.5;
+    const boxOpacity = selected ? (isSel ? 1 : 0.4) : 1;
+    const thisCount = vr.filter(r => r.twCode === code).length;
+    const lastCount = vr.filter(r => r.lwCode === code).length;
+    const countY = y - 9;
+    boxParts.push(`<g opacity="${boxOpacity}">`);
+    boxParts.push(`<text x="${cx(pos)-4}" y="${countY}" text-anchor="end" font-family="var(--font-mono)" font-weight="800" font-size="${isSel?17:14}" fill="var(--ink)">${thisCount}</text>`);
+    boxParts.push(`<text x="${cx(pos)+4}" y="${countY}" text-anchor="start" font-family="var(--font-mono)" font-weight="500" font-size="9.5" fill="var(--slate)" opacity="0.6">${lastCount}</text>`);
+    if (isSel) boxParts.push(`<rect x="${x-4}" y="${y-4}" width="${w+8}" height="${h+8}" rx="12" fill="none" stroke="var(--amber)" stroke-width="2"/>`);
+    boxParts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`);
+    const fontSize = isSel ? 14.5 : (pos.w <= 62 ? 13 : 12.5);
+    boxParts.push(`<text x="${cx(pos)}" y="${cy(pos)+1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-weight="700" font-size="${fontSize}" fill="${stroke}">${code}</text>`);
+    boxParts.push(`</g>`);
+  });
+
+  // ---- Permanent Input (into 9010) and Output (out of 5020, no 5030 box) indicators ----
+  const permanentParts = [];
+  const n9010 = FLOW_LAYOUT["9010"], n5020 = FLOW_LAYOUT["5020"];
+  if (n9010) {
+    const permInCount = vr.filter(r => r.twCode === "9010" && isBlankLastWeek(r.lwCode)).length;
+    const py = cy(n9010), sx = -70;
+    permanentParts.push(`<line x1="${sx}" y1="${py}" x2="${n9010.x-3}" y2="${py}" stroke="var(--rail)" stroke-width="2.6" marker-end="url(#flowArrowGreen)"/>`);
+    permanentParts.push(`<rect x="${sx-2}" y="${py-25}" width="62" height="17" rx="8.5" fill="var(--rail)"/>`);
+    permanentParts.push(`<text x="${sx+29}" y="${py-16.5}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">Input ${permInCount}</text>`);
+  }
+  if (n5020) {
+    const permOutCount = vr.filter(r => r.twCode === "5030").length;
+    const py2 = cy(n5020), sx2 = n5020.x + n5020.w + 3, ex2 = sx2 + 46;
+    permanentParts.push(`<line x1="${sx2}" y1="${py2}" x2="${ex2}" y2="${py2}" stroke="var(--rust)" stroke-width="2.6" marker-end="url(#flowArrowRust)"/>`);
+    permanentParts.push(`<rect x="${ex2-6}" y="${py2-25}" width="76" height="17" rx="8.5" fill="var(--rust)"/>`);
+    permanentParts.push(`<text x="${ex2+32}" y="${py2-16.5}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">Output ${permOutCount}</text>`);
+    permanentParts.push(`<text x="${ex2+2}" y="${py2+4}" text-anchor="start" font-family="var(--font-mono)" font-size="9.5" fill="var(--rust)">5030</text>`);
+  }
+
+  let summaryHtml = "";
+  if (selected && FLOW_LAYOUT[selected]) {
+    const { inflow, outflow } = computeMovementDetail(selected);
+    const target = FLOW_LAYOUT[selected];
+    const inEntries = Object.entries(inflow);
+    const outEntries = Object.entries(outflow);
+
+    inEntries.forEach(([src, count], i) => {
+      const bend = -46 - i * 14;
+      if (src === "__NEW__") {
+        const startX = Math.max(6, target.x - 46), startY = cy(target) - 30 - i * 8;
+        movementParts.push(`<path class="movement-arrow" d="M${startX} ${startY}Q${startX+20} ${cy(target)} ${cx(target)-2} ${cy(target)-4}" fill="none" stroke="var(--rail)" stroke-width="2.4" marker-end="url(#flowArrowGreen)"/>`);
+        movementParts.push(`<rect x="${startX-2}" y="${startY-13}" width="46" height="16" rx="8" fill="var(--rail)"/>`);
+        movementParts.push(`<text x="${startX+21}" y="${startY-5}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">New ${count}</text>`);
+        return;
+      }
+      const s = FLOW_LAYOUT[src];
+      if (!s) return;
+      const midX = (cx(s) + cx(target)) / 2, midY = (cy(s) + cy(target)) / 2 + bend;
+      movementParts.push(`<path class="movement-arrow" d="M${cx(s)} ${cy(s)}Q${midX} ${midY} ${cx(target)} ${cy(target)}" fill="none" stroke="var(--rail)" stroke-width="2.4" marker-end="url(#flowArrowGreen)"/>`);
+      movementParts.push(`<rect x="${midX-16}" y="${midY-9}" width="32" height="16" rx="8" fill="var(--rail)"/>`);
+      movementParts.push(`<text x="${midX}" y="${midY-1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">${count}</text>`);
+    });
+
+    outEntries.forEach(([dst, count], i) => {
+      const bend = 46 + i * 14;
+      const d = FLOW_LAYOUT[dst];
+      if (!d) return;
+      const midX = (cx(target) + cx(d)) / 2, midY = (cy(target) + cy(d)) / 2 + bend;
+      movementParts.push(`<path class="movement-arrow" d="M${cx(target)} ${cy(target)}Q${midX} ${midY} ${cx(d)} ${cy(d)}" fill="none" stroke="var(--rust)" stroke-width="2.4" marker-end="url(#flowArrowRust)"/>`);
+      movementParts.push(`<rect x="${midX-16}" y="${midY-9}" width="32" height="16" rx="8" fill="var(--rust)"/>`);
+      movementParts.push(`<text x="${midX}" y="${midY-1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">${count}</text>`);
+    });
+
+    const totalIn = inEntries.reduce((s, [,c]) => s + c, 0);
+    const totalOut = outEntries.reduce((s, [,c]) => s + c, 0);
+    const inList = inEntries.length
+      ? inEntries.map(([src, c]) => src === "__NEW__" ? `ใหม่ ${c}` : `${flowLabel(src)} ${c}`).join(", ")
+      : "ไม่มี";
+    const outList = outEntries.length
+      ? outEntries.map(([dst, c]) => `${flowLabel(dst)} ${c}`).join(", ")
+      : "ไม่มี";
+    summaryHtml = `สถานะ <b>${selected} · ${defByCode[selected].name}</b> — เข้ารวม <b style="color:var(--rail);">${totalIn}</b> ตัว (จาก: ${inList}) &nbsp;·&nbsp; ออกรวม <b style="color:var(--rust);">${totalOut}</b> ตัว (ไปยัง: ${outList})`;
+  } else {
+    summaryHtml = "เลือกสถานะด้านบนเพื่อดูรายละเอียดการเคลื่อนไหวเข้า-ออกของสถานะนั้น";
+  }
+  document.getElementById("flowSummaryText").innerHTML = summaryHtml;
+
+  container.innerHTML = `
+    <svg width="100%" viewBox="-90 0 890 300" role="img" style="display:block;">
+      <title>Active and inactive status flow with movement</title>
+      <desc>Interactive status flow diagram showing active and inactive statuses with in/out movement when a status is selected</desc>
+      <defs>
+        <marker id="flowArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+        <marker id="flowArrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--rust)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+        <marker id="flowArrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--rail)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+        <marker id="flowArrowRust" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--rust)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+      </defs>
+      ${structuralParts.join("")}
+      ${movementParts.join("")}
+      ${boxParts.join("")}
+      ${permanentParts.join("")}
+      <rect x="44" y="272" width="14" height="14" rx="3" fill="var(--rail)"/>
+      <text x="64" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Active / เข้า (In)</text>
+      <rect x="220" y="272" width="14" height="14" rx="3" fill="var(--rust)"/>
+      <text x="240" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Inactive / ออก (Out)</text>
+      <rect x="420" y="272" width="14" height="14" rx="3" fill="none" stroke="var(--amber)" stroke-width="2"/>
+      <text x="440" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">สถานะที่เลือก</text>
+      <text x="44" y="16" font-family="var(--font-mono)" font-weight="800" font-size="13" fill="var(--ink)">12</text>
+      <text x="62" y="16" font-family="var(--font-mono)" font-size="9.5" fill="var(--slate)" opacity="0.6">7</text>
+      <text x="76" y="16" font-family="var(--font-mono)" font-size="10" fill="var(--slate)">= This week (ใหญ่/เข้ม) · Last week (เล็ก/จาง)</text>
+    </svg>`;
+}
+
+// ---- Last week vs This week line chart ----
+let selectedChartPoint = null; // {code, week}
+
+function renderLineChart(){
+  const container = document.getElementById("lineChartContainer");
+  const n = STATUS_DEFS.length;
+  const leftM = 50, rightM = 30, topM = 24, chartW = 850 - leftM - rightM, chartH = 190;
+  const baseY = topM + chartH;
+  const step = n > 1 ? chartW / (n - 1) : 0;
+
+  const vr = visibleRows();
+  const counts = STATUS_DEFS.map(d => ({
+    code: d.code,
+    last: vr.filter(r => r.lwCode === d.code).length,
+    thisW: vr.filter(r => r.twCode === d.code).length,
+  }));
+  const maxVal = Math.max(1, ...counts.map(c => Math.max(c.last, c.thisW)));
+  const yFor = (v) => baseY - (v / maxVal) * chartH;
+  const xFor = (i) => leftM + i * step;
+
+  const gridLines = [];
+  const gridSteps = 4;
+  for (let g = 0; g <= gridSteps; g++) {
+    const v = Math.round((maxVal / gridSteps) * g);
+    const y = yFor(v);
+    gridLines.push(`<line x1="${leftM}" y1="${y}" x2="${leftM + chartW}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`);
+    gridLines.push(`<text x="${leftM - 8}" y="${y + 3}" text-anchor="end" font-family="var(--font-mono)" font-size="9.5" fill="var(--slate)">${v}</text>`);
+  }
+
+  const lastPts = counts.map((c, i) => `${xFor(i)},${yFor(c.last)}`).join(" ");
+  const thisPts = counts.map((c, i) => `${xFor(i)},${yFor(c.thisW)}`).join(" ");
+
+  const xLabels = counts.map((c, i) => {
+    const x = xFor(i);
+    return `<text x="${x}" y="${baseY + 16}" text-anchor="end" font-family="var(--font-mono)" font-size="10" fill="var(--slate)" transform="rotate(-40 ${x} ${baseY + 16})">${c.code}</text>`;
+  }).join("");
+
+  const dots = [];
+  counts.forEach((c, i) => {
+    const x = xFor(i);
+    const isSelLast = selectedChartPoint && selectedChartPoint.code === c.code && selectedChartPoint.week === "last";
+    const isSelThis = selectedChartPoint && selectedChartPoint.code === c.code && selectedChartPoint.week === "this";
+    dots.push(`<circle class="chart-point" cx="${x}" cy="${yFor(c.last)}" r="${isSelLast?7:4.5}" fill="var(--paper-raised)" stroke="var(--slate)" stroke-width="${isSelLast?3:2}" onclick="handleChartPointClick('${c.code}','last')"><title>${c.code} · Last week: ${c.last}</title></circle>`);
+    dots.push(`<circle class="chart-point" cx="${x}" cy="${yFor(c.thisW)}" r="${isSelThis?7:4.5}" fill="var(--rail)" stroke="var(--paper-raised)" stroke-width="${isSelThis?3:2}" onclick="handleChartPointClick('${c.code}','this')"><title>${c.code} · This week: ${c.thisW}</title></circle>`);
+  });
+
+  container.innerHTML = `
+    <svg width="100%" viewBox="0 0 850 260" role="img" style="display:block;">
+      <title>Unit count per status: Last week vs This week</title>
+      <desc>Line chart comparing the number of units in each status between last week and this week, clickable points show the unit list</desc>
+      ${gridLines.join("")}
+      <polyline points="${lastPts}" fill="none" stroke="var(--slate)" stroke-width="2" stroke-dasharray="5 4"/>
+      <polyline points="${thisPts}" fill="none" stroke="var(--rail)" stroke-width="2.4"/>
+      ${xLabels}
+      ${dots.join("")}
+      <circle cx="640" cy="14" r="5" fill="var(--paper-raised)" stroke="var(--slate)" stroke-width="2"/>
+      <text x="652" y="18" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Last week</text>
+      <circle cx="740" cy="14" r="5" fill="var(--rail)"/>
+      <text x="752" y="18" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">This week</text>
+    </svg>`;
+}
+
+function handleChartPointClick(code, week){
+  selectedChartPoint = (selectedChartPoint && selectedChartPoint.code === code && selectedChartPoint.week === week)
+    ? null : { code, week };
+  renderLineChart();
+  renderChartDetailList();
+}
+
+const escapeHtml = (s) => (s || "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+let expandedManagers = new Set();
+
+function renderActivePlanSummary(){
+  const box = document.getElementById("activePlanSummaryGrid");
+  if (!box) return;
+  const vr = visibleRows();
+  const activeStatuses = STATUS_DEFS.filter(d => d.active);
+
+  box.innerHTML = activeStatuses.map(d => {
+    const units = vr.filter(r => r.twCode === d.code);
+    const total = units.length;
+    if (total === 0) {
+      return `<div class="active-plan-box">
+        <div class="active-plan-box-header">
+          <span class="code-pill">${d.code}</span>
+          <span class="active-plan-box-total">0</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--ink); font-weight:600; margin-bottom:6px;">${d.name}</div>
+        <p class="chart-empty-hint">ไม่มี unit ในสถานะนี้</p>
+      </div>`;
+    }
+    const byManager = {};
+    units.forEach(r => {
+      const mgr = (r.manager && r.manager.trim()) ? r.manager.trim() : "(ไม่ระบุ Manager)";
+      if (!byManager[mgr]) byManager[mgr] = { have: 0, no: 0, units: [] };
+      if (r.plan === "Have plan") byManager[mgr].have++; else byManager[mgr].no++;
+      byManager[mgr].units.push(r);
+    });
+    const totalHave = units.filter(r => r.plan === "Have plan").length;
+    const totalNo = total - totalHave;
+    const mgrRows = Object.entries(byManager)
+      .sort((a, b) => (b[1].have + b[1].no) - (a[1].have + a[1].no))
+      .map(([mgr, c]) => {
+        const key = `${d.code}::${mgr}`;
+        const isOpen = expandedManagers.has(key);
+        const mainRow = `<tr class="mgr-row" data-key="${escapeHtml(key)}">
+          <td><span class="mgr-caret">${isOpen ? "▾" : "▸"}</span>${escapeHtml(mgr)}</td>
+          <td class="num" style="color:var(--rail);">${c.have}</td>
+          <td class="num" style="color:var(--rust);">${c.no}</td>
+          <td class="num">${c.have + c.no}</td>
+        </tr>`;
+        if (!isOpen) return mainRow;
+        const subRows = c.units
+          .slice()
+          .sort((a, b) => (a.plan === "Have plan" ? 1 : 0) - (b.plan === "Have plan" ? 1 : 0))
+          .map(u => {
+            const isNoPlan = u.plan !== "Have plan";
+            const co = u.co && u.co.trim() ? u.co.trim() : "(ไม่ระบุ Co)";
+            return `<tr class="mgr-sub-row">
+              <td colspan="2" style="padding-left:20px; color:${isNoPlan ? "var(--rust)" : "var(--slate)"};">${escapeHtml(co)} <span style="color:var(--slate); font-family:var(--font-mono); font-size:10px;">(${escapeHtml(u.wbs||"—")})</span></td>
+              <td colspan="2" class="num" style="color:${isNoPlan ? "var(--rust)" : "var(--rail)"}; font-weight:${isNoPlan ? "700" : "500"};">${isNoPlan ? "No plan" : "Have plan"}</td>
+            </tr>`;
+          }).join("");
+        return mainRow + subRows;
+      })
+      .join("");
+    return `<div class="active-plan-box">
+      <div class="active-plan-box-header">
+        <span class="code-pill">${d.code}</span>
+        <span class="active-plan-box-total">${total}</span>
+      </div>
+      <div style="font-size:11.5px; color:var(--ink); font-weight:600; margin-bottom:6px;">${d.name} · This week</div>
+      <table class="active-plan-mgr-table">
+        <thead><tr><th>Manager</th><th style="text-align:center;">Have plan</th><th style="text-align:center;">No plan</th><th style="text-align:center;">รวม</th></tr></thead>
+        <tbody>
+          ${mgrRows}
+          <tr class="plan-total-row"><td>รวมทั้งหมด</td><td class="num" style="color:var(--rail);">${totalHave}</td><td class="num" style="color:var(--rust);">${totalNo}</td><td class="num">${total}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+  }).join("");
+}
+
+function renderChartDetailList(){
+  const box = document.getElementById("chartDetailList");
+  if (!selectedChartPoint) {
+    box.innerHTML = `<p class="chart-empty-hint">คลิกจุดสีเทา (Last week) หรือสีเขียว (This week) บนกราฟ เพื่อดูรายชื่อ unit</p>`;
+    return;
+  }
+  const { code, week } = selectedChartPoint;
+  const def = defByCode[code];
+  const matched = week === "this" ? visibleRows().filter(r => r.twCode === code) : visibleRows().filter(r => r.lwCode === code);
+  const weekLabel = week === "this" ? "This week" : "Last week";
+
+  if (matched.length === 0) {
+    box.innerHTML = `<div class="chart-detail-header">${code} · ${def.name} — ${weekLabel} (0 unit)</div><p class="chart-empty-hint">ไม่มี unit ในสถานะนี้ช่วงเวลานี้</p>`;
+    return;
+  }
+
+  const rowsHtml = matched.map(r => `
+    <tr>
+      <td>${r.wbs || ""}</td>
+      <td>${r.project || ""}</td>
+      <td>Team ${r.team || ""}</td>
+      <td>${r.manager || ""}</td>
+      <td>${r.co || ""}</td>
+      <td>${r.subcon || ""}</td>
+      <td>${r.plan || ""}</td>
+      <td>${r.payment || ""}</td>
+      <td>${r.rv || ""}</td>
+      <td>${r.onsite || ""}</td>
+    </tr>`).join("");
+
+  box.innerHTML = `
+    <div class="chart-detail-header">${code} · ${def.name} — ${weekLabel} (${matched.length} unit)</div>
+    <div style="overflow-x:auto; border:1px solid var(--line); border-radius:10px;">
+      <table class="detail-table">
+        <thead><tr><th>WBS.LV.4</th><th>Project name</th><th>Team</th><th>Manager</th><th>Co</th><th>Subcontractor</th><th>Plan</th><th>Payment</th><th>RV shipment</th><th>Onsite date</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+
+let rows = [
+  { id: uid(), example: true, wbs:"WBS-1.2.4.001", project:"โครงการอ่างเก็บน้ำ A", team:"A",
+    manager:"สมชาย ใจดี", co:"ABC Co., Ltd.", subcon:"XYZ Subcon", plan:"Have plan", payment:"เงินผ่าน",
+    rv:"2026-07-20", onsite:"2026-07-25", f601:"",
+    lwCode:"9010", lwSub:"paid", twCode:"9020", twSub:"paid" },
+];
+
+const STORAGE_KEY = "unit-weekly-upload-rows";
+let teamFilter = "all";
+const visibleRows = () => teamFilter === "all" ? rows : rows.filter(r => r.team === teamFilter);
+let planTargets = { all: 0, A: 0, B: 0, C: 0 };
+const PLAN_PERIOD_END = new Date(2027, 2, 31); // 31 Mar 2027 (month index 2 = March)
+
+function renderTeamFilterButtons(){
+  const box = document.getElementById("teamFilterButtons");
+  box.innerHTML = "";
+  [{key:"all", label:"ทั้งหมด"}, {key:"A", label:"Team A"}, {key:"B", label:"Team B"}, {key:"C", label:"Team C"}].forEach(o => {
+    const btn = document.createElement("button");
+    btn.className = "team-pill" + (teamFilter === o.key ? " is-selected" : "");
+    btn.textContent = o.label;
+    btn.addEventListener("click", () => {
+      teamFilter = o.key;
+      renderTeamFilterButtons();
+      renderTable();
+      computeAndRenderSummary();
+      renderFiscalTable();
+    });
+    box.appendChild(btn);
+  });
+}
+
+// ---- Fiscal year (Apr–Mar) Input/Output history ----
+let eventLog = []; // {id, date:'YYYY-MM-DD', type:'in'|'out', wbs, team}
+let selectedFiscalYear = null; // set on init to the FY containing today
+
+function fiscalYearEndYear(dateInput){
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  const y = d.getFullYear(), m = d.getMonth();
+  return m >= 3 ? y + 1 : y; // Apr(3)..Dec belong to the FY ending next Mar
+}
+function fiscalLabel(endYear){
+  return `Apr'${String(endYear - 1).slice(2)}–Mar'${String(endYear).slice(2)}`;
+}
+
+function logThisWeekEvents(){
+  const dateInput = document.getElementById("logDateInput");
+  const dateStr = dateInput.value || new Date().toISOString().slice(0, 10);
+  eventLog = eventLog.filter(e => e.date !== dateStr);
+  const newEntries = [];
+  rows.forEach(r => {
+    if (r.twCode === "9010" && isBlankLastWeek(r.lwCode)) {
+      newEntries.push({ id: uid(), date: dateStr, type: "in", wbs: r.wbs, team: r.team || "A" });
+    }
+    if (r.twCode === "5030") {
+      newEntries.push({ id: uid(), date: dateStr, type: "out", wbs: r.wbs, team: r.team || "A" });
+    }
+  });
+  eventLog = eventLog.concat(newEntries);
+  persist();
+  renderFiscalYearButtons();
+  renderFiscalTable();
+  const inC = newEntries.filter(e => e.type === "in").length;
+  const outC = newEntries.filter(e => e.type === "out").length;
+  document.getElementById("logCountLabel").textContent = `บันทึกแล้ว (${dateStr}): เข้า ${inC} · ออก ${outC}`;
+}
+
+function renderFiscalYearButtons(){
+  const box = document.getElementById("fiscalYearButtons");
+  const years = new Set(eventLog.map(e => fiscalYearEndYear(e.date)));
+  years.add(fiscalYearEndYear(new Date()));
+  if (selectedFiscalYear === null) selectedFiscalYear = fiscalYearEndYear(new Date());
+  const sorted = [...years].sort((a, b) => a - b);
+  box.innerHTML = "";
+  sorted.forEach(y => {
+    const btn = document.createElement("button");
+    btn.className = "flow-pill" + (selectedFiscalYear === y ? " is-selected" : "");
+    btn.textContent = `FY ${fiscalLabel(y)}`;
+    btn.addEventListener("click", () => { selectedFiscalYear = y; renderFiscalYearButtons(); renderFiscalTable(); });
+    box.appendChild(btn);
+  });
+}
+
+function renderFiscalTable(){
+  const body = document.getElementById("fiscalBody");
+  if (!body) return;
+  const scoped = teamFilter === "all" ? eventLog : eventLog.filter(e => e.team === teamFilter);
+  const filtered = scoped.filter(e => fiscalYearEndYear(e.date) === selectedFiscalYear);
+  const monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2];
+  const monthNamesTH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  const today = new Date();
+  let cumIn = 0, cumOut = 0, currentMonthCum = null;
+  let html = "";
+
+  monthOrder.forEach(mIdx => {
+    const calYear = mIdx >= 3 ? selectedFiscalYear - 1 : selectedFiscalYear;
+    const monthIn = filtered.filter(e => { const d = new Date(e.date); return e.type === "in" && d.getMonth() === mIdx && d.getFullYear() === calYear; }).length;
+    const monthOut = filtered.filter(e => { const d = new Date(e.date); return e.type === "out" && d.getMonth() === mIdx && d.getFullYear() === calYear; }).length;
+    cumIn += monthIn; cumOut += monthOut;
+    const isCurrentMonth = calYear === today.getFullYear() && mIdx === today.getMonth();
+    if (isCurrentMonth) currentMonthCum = { in: cumIn, out: cumOut };
+    const net = monthIn - monthOut, cumNet = cumIn - cumOut;
+    html += `<tr${isCurrentMonth ? ' style="background:var(--amber-soft);"' : ""}>
+      <td>${monthNamesTH[mIdx]} ${calYear}</td>
+      <td class="num" style="color:var(--rail);">+${monthIn}</td>
+      <td class="num" style="color:var(--rust);">-${monthOut}</td>
+      <td class="num">${net > 0 ? "+" + net : net}</td>
+      <td class="num">${cumIn}</td>
+      <td class="num">${cumOut}</td>
+      <td class="num">${cumNet > 0 ? "+" + cumNet : cumNet}</td>
+    </tr>`;
+  });
+  body.innerHTML = html;
+
+  const noteEl = document.getElementById("fiscalCumulativeNote");
+  if (currentMonthCum) {
+    noteEl.innerHTML = `สะสมตั้งแต่ต้นปีงบประมาณ (Apr) ถึงเดือนปัจจุบัน — เข้ารวม <b style="color:var(--rail);">${currentMonthCum.in}</b> ตัว · ออกรวม <b style="color:var(--rust);">${currentMonthCum.out}</b> ตัว`;
+  } else {
+    noteEl.innerHTML = `ปีงบประมาณนี้ไม่รวมเดือนปัจจุบัน — เข้ารวมทั้งปี <b style="color:var(--rail);">${cumIn}</b> ตัว · ออกรวมทั้งปี <b style="color:var(--rust);">${cumOut}</b> ตัว`;
+  }
+}
+
+function calendarDiff(from, to){
+  if (to <= from) return { years:0, months:0, days:0, ended:true };
+  let y = to.getFullYear() - from.getFullYear();
+  let m = to.getMonth() - from.getMonth();
+  let d = to.getDate() - from.getDate();
+  if (d < 0) { m -= 1; const prevMonthLastDay = new Date(to.getFullYear(), to.getMonth(), 0).getDate(); d += prevMonthLastDay; }
+  if (m < 0) { y -= 1; m += 12; }
+  return { years:y, months:m, days:d, ended:false };
+}
+
+function renderPlanActualCard(){
+  const planInput = document.getElementById("planTargetInput");
+  const plan = planTargets[teamFilter] || 0;
+  if (document.activeElement !== planInput) planInput.value = plan;
+  const actual = visibleRows().filter(r => r.twCode === "5030").length;
+  const pct = plan > 0 ? Math.round((actual / plan) * 1000) / 10 : 0;
+
+  document.getElementById("planActualCount").textContent = actual;
+  document.getElementById("planPercent").textContent = pct + "%";
+  document.getElementById("planProgressBar").style.width = Math.min(100, pct) + "%";
+  document.getElementById("planTeamTag").textContent = teamFilter === "all" ? "" : ` · Team ${teamFilter}`;
+
+  const diff = calendarDiff(new Date(), PLAN_PERIOD_END);
+  const cdEl = document.getElementById("planCountdown");
+  cdEl.textContent = diff.ended
+    ? "สิ้นสุดช่วงแผนแล้ว"
+    : `${diff.years} ปี ${diff.months} เดือน ${diff.days} วัน`;
+}
+
+
+function detailOptions(code){
+  const def = defByCode[code];
+  if (!def) return null;
+  return SPLIT_OPTIONS[def.split];
+}
+
+function statusName(code){ return defByCode[code] ? defByCode[code].name : ""; }
+
+function changeText(r){
+  if (!r.lwCode || !r.twCode) return "";
+  if (r.lwCode === r.twCode) return "ไม่เปลี่ยนสถานะ";
+  return `${r.lwCode} (${statusName(r.lwCode)})  →  ${r.twCode} (${statusName(r.twCode)})`;
+}
+
+function el(tag, props={}, children=[]){
+  const e = document.createElement(tag);
+  Object.entries(props).forEach(([k,v]) => {
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else e.setAttribute(k, v);
+  });
+  children.forEach(c => e.appendChild(c));
+  return e;
+}
+
+function buildSelect(options, value, onChange){
+  const sel = document.createElement("select");
+  options.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o.value; opt.textContent = o.label;
+    if (o.value === value) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change", (e) => onChange(e.target.value));
+  return sel;
+}
+
+function buildInput(type, value, onChange, placeholder=""){
+  const inp = document.createElement("input");
+  inp.type = type;
+  inp.value = value || "";
+  if (placeholder) inp.placeholder = placeholder;
+  inp.addEventListener("input", (e) => onChange(e.target.value));
+  return inp;
+}
+
+function renderLegend(){
+  const box = document.getElementById("statusLegend");
+  box.innerHTML = "";
+  STATUS_DEFS.forEach(d => {
+    const opts = SPLIT_OPTIONS[d.split];
+    const detail = opts ? opts.map(o => o.label).join(" / ") : "ไม่มีการแบ่งย่อย";
+    const pillStyle = d.active
+      ? "background:var(--rail-soft); color:var(--rail);"
+      : "background:var(--rust-soft); color:var(--rust);";
+    const item = el("div", {class:"status-legend-item"});
+    item.innerHTML = `<span class="code-pill" style="${pillStyle}">${d.code}</span> <span>${d.name} — ${detail}</span>`;
+    box.appendChild(item);
+  });
+}
+
+function renderTable(){
+  const body = document.getElementById("dataBody");
+  body.innerHTML = "";
+  visibleRows().forEach((r) => {
+    const tr = document.createElement("tr");
+    if (r.example) tr.classList.add("example-row");
+
+    const tdWbs = el("td"); tdWbs.appendChild(buildInput("text", r.wbs, v => r.wbs = v, "WBS-x.x.x.xxx")); tr.appendChild(tdWbs);
+    const tdProj = el("td"); tdProj.appendChild(buildInput("text", r.project, v => r.project = v, "ชื่อโครงการ")); tr.appendChild(tdProj);
+
+    const tdTeam = el("td"); tdTeam.appendChild(buildSelect(
+      ["A","B","C"].map(t => ({value:t,label:`Team ${t}`})), r.team, v => r.team = v
+    )); tr.appendChild(tdTeam);
+
+    const tdMgr = el("td"); tdMgr.appendChild(buildInput("text", r.manager, v => r.manager = v)); tr.appendChild(tdMgr);
+    const tdCo = el("td"); tdCo.appendChild(buildInput("text", r.co, v => r.co = v)); tr.appendChild(tdCo);
+    const tdSub = el("td"); tdSub.appendChild(buildInput("text", r.subcon, v => r.subcon = v)); tr.appendChild(tdSub);
+
+    const tdPlan = el("td"); tdPlan.appendChild(buildSelect(
+      [{value:"Have plan",label:"Have plan"},{value:"No plan",label:"No plan"}], r.plan || "No plan", v => r.plan = v
+    )); tr.appendChild(tdPlan);
+
+    const tdPay = el("td"); tdPay.appendChild(buildSelect(
+      [{value:"เงินผ่าน",label:"เงินผ่าน"},{value:"เงินยังไม่ผ่าน",label:"เงินยังไม่ผ่าน"}], r.payment, v => r.payment = v
+    )); tr.appendChild(tdPay);
+
+    const tdRv = el("td"); tdRv.appendChild(buildInput("date", r.rv, v => r.rv = v)); tr.appendChild(tdRv);
+    const tdOn = el("td"); tdOn.appendChild(buildInput("date", r.onsite, v => r.onsite = v)); tr.appendChild(tdOn);
+
+    const tdF601 = el("td", {class:"flag"}); tdF601.appendChild(buildInput("text", r.f601, v => r.f601 = v, "รอยืนยัน")); tr.appendChild(tdF601);
+
+    // Last week status + detail
+    const tdLwCode = el("td");
+    const lwCodeSel = buildSelect(
+      [{value:"",label:"— เลือก —"}, ...STATUS_DEFS.map(d => ({value:d.code,label:`${d.code} · ${d.name}`}))],
+      r.lwCode, v => { r.lwCode = v; r.lwSub = detailOptions(v) ? (detailOptions(v)[0].key) : null; renderTable(); computeAndRenderSummary(); }
+    );
+    tdLwCode.appendChild(lwCodeSel); tr.appendChild(tdLwCode);
+
+    const tdLwSub = el("td");
+    const lwOpts = detailOptions(r.lwCode);
+    if (lwOpts) {
+      tdLwSub.appendChild(buildSelect(lwOpts.map(o=>({value:o.key,label:o.label})), r.lwSub, v => r.lwSub = v));
+    } else {
+      const span = el("span", {text: r.lwCode ? "N/A" : ""});
+      span.style.color = "var(--slate)"; span.style.fontSize="11.5px";
+      tdLwSub.appendChild(span);
+    }
+    tr.appendChild(tdLwSub);
+
+    // This week status + detail
+    const tdTwCode = el("td");
+    const twCodeSel = buildSelect(
+      [{value:"",label:"— เลือก —"}, ...STATUS_DEFS.map(d => ({value:d.code,label:`${d.code} · ${d.name}`}))],
+      r.twCode, v => { r.twCode = v; r.twSub = detailOptions(v) ? (detailOptions(v)[0].key) : null; renderTable(); computeAndRenderSummary(); }
+    );
+    tdTwCode.appendChild(twCodeSel); tr.appendChild(tdTwCode);
+
+    const tdTwSub = el("td");
+    const twOpts = detailOptions(r.twCode);
+    if (twOpts) {
+      tdTwSub.appendChild(buildSelect(twOpts.map(o=>({value:o.key,label:o.label})), r.twSub, v => r.twSub = v));
+    } else {
+      const span = el("span", {text: r.twCode ? "N/A" : ""});
+      span.style.color = "var(--slate)"; span.style.fontSize="11.5px";
+      tdTwSub.appendChild(span);
+    }
+    tr.appendChild(tdTwSub);
+
+    const tdChange = el("td", {class:"change-cell", text: changeText(r)});
+    tr.appendChild(tdChange);
+
+    const tdRemove = el("td", {class:"remove-cell"});
+    const rmBtn = el("button", {class:"remove-btn", text:"✕"});
+    rmBtn.addEventListener("click", () => { rows = rows.filter(x => x.id !== r.id); persist(); renderTable(); computeAndRenderSummary(); });
+    tdRemove.appendChild(rmBtn);
+    tr.appendChild(tdRemove);
+
+    body.appendChild(tr);
+  });
+  const vCount = visibleRows().length;
+  document.getElementById("rowCountLabel").textContent = teamFilter === "all" ? `${rows.length} หน่วย` : `${vCount} / ${rows.length} หน่วย (Team ${teamFilter})`;
+}
+
+function isBlankLastWeek(code){
+  return !code || code === "" || code === "N/A";
+}
+
+function computeAndRenderKpi(){
+  const vr = visibleRows();
+  const inputCount = vr.filter(r => r.twCode === "9010" && isBlankLastWeek(r.lwCode)).length;
+  const outputCount = vr.filter(r => r.twCode === "5030").length;
+  document.getElementById("kpiInputCount").textContent = inputCount;
+  document.getElementById("kpiOutputCount").textContent = outputCount;
+  renderPlanActualCard();
+}
+
+function movementFor(code){
+  const vr = visibleRows();
+  const inCount = vr.filter(r => r.twCode === code && r.lwCode !== code).length;
+  const outCount = vr.filter(r => r.lwCode === code && r.twCode !== code).length;
+  return { inCount, outCount };
+}
+
+function computeAndRenderSummary(){
+  const body = document.getElementById("summaryBody");
+  body.innerHTML = "";
+  let totalLast = 0, totalThis = 0, totalIn = 0, totalOut = 0;
+  const vr = visibleRows();
+
+  const stats = STATUS_DEFS.map(d => {
+    const last = vr.filter(r => r.lwCode === d.code).length;
+    const thisW = vr.filter(r => r.twCode === d.code).length;
+    const { inCount, outCount } = movementFor(d.code);
+    return { d, last, thisW, inCount, outCount };
+  });
+  const maxMove = Math.max(1, ...stats.map(s => Math.max(s.inCount, s.outCount)));
+  const barMax = 70;
+
+  stats.forEach(({ d, last, thisW, inCount, outCount }) => {
+    totalLast += last; totalThis += thisW; totalIn += inCount; totalOut += outCount;
+    const delta = thisW - last;
+    const inW = Math.round((inCount / maxMove) * barMax);
+    const outW = Math.round((outCount / maxMove) * barMax);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="code-pill">${d.code}</span></td>
+      <td>${d.name}</td>
+      <td class="num">${last}</td>
+      <td class="num">${thisW}</td>
+      <td class="num" style="color:var(--rail);">+${inCount}</td>
+      <td class="num" style="color:var(--rust);">-${outCount}</td>
+      <td class="num">${delta > 0 ? "+"+delta : delta}</td>
+      <td>
+        <div style="display:flex; flex-direction:column; gap:2px; min-width:90px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:${inW}px; height:7px; background:var(--rail); border-radius:3px;"></div>
+            <span style="font-family:var(--font-mono); font-size:10px; color:var(--slate);">เข้า ${inCount}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:${outW}px; height:7px; background:var(--rust); border-radius:3px;"></div>
+            <span style="font-family:var(--font-mono); font-size:10px; color:var(--slate);">ออก ${outCount}</span>
+          </div>
+        </div>
+      </td>`;
+    body.appendChild(tr);
+  });
+
+  const totalDelta = totalThis - totalLast;
+  const totalTr = document.createElement("tr");
+  totalTr.classList.add("total");
+  totalTr.innerHTML = `
+    <td></td><td>รวมทั้งหมด</td>
+    <td class="num">${totalLast}</td>
+    <td class="num">${totalThis}</td>
+    <td class="num" style="color:var(--rail);">+${totalIn}</td>
+    <td class="num" style="color:var(--rust);">-${totalOut}</td>
+    <td class="num">${totalDelta > 0 ? "+"+totalDelta : totalDelta}</td>
+    <td></td>`;
+  body.appendChild(totalTr);
+  computeAndRenderKpi();
+  renderFlowDiagram();
+  renderLineChart();
+  renderChartDetailList();
+  renderActivePlanSummary();
+}
+
+function persist(){
+  try {
+    if (window.storage && window.storage.set) {
+      window.storage.set(STORAGE_KEY, JSON.stringify({ rows, planTargets, eventLog }), false).catch(()=>{});
+    }
+  } catch(e) { /* storage unavailable outside artifact sandbox — ignore */ }
+}
+
+function csvEscape(v){
+  const s = (v ?? "").toString();
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+
+function exportCsv(){
+  const headers = ["WBS.LV.4","Project name","Team","Manager","Co","Subcontractor","Plan","สถานะ Payment","RV shipment","Onsite date","601F","รหัสสถานะ (Last week)","ชื่อสถานะ (Last week)","รายละเอียด (Last week)","รหัสสถานะ (This week)","ชื่อสถานะ (This week)","รายละเอียด (This week)","การเปลี่ยนแปลง"];
+  const lines = [headers.map(csvEscape).join(",")];
+  rows.forEach(r => {
+    const lwLabel = detailOptions(r.lwCode) ? detailOptions(r.lwCode).find(o=>o.key===r.lwSub)?.label || "" : "N/A";
+    const twLabel = detailOptions(r.twCode) ? detailOptions(r.twCode).find(o=>o.key===r.twSub)?.label || "" : "N/A";
+    lines.push([r.wbs,r.project,r.team,r.manager,r.co,r.subcon,r.plan||"",r.payment,r.rv,r.onsite,r.f601,
+      r.lwCode,statusName(r.lwCode),lwLabel,r.twCode,statusName(r.twCode),twLabel,changeText(r)].map(csvEscape).join(","));
+  });
+  downloadBlob("\uFEFF" + lines.join("\n"), "unit_status_weekly.csv", "text/csv;charset=utf-8;");
+}
+
+function exportJson(){
+  downloadBlob(JSON.stringify(rows, null, 2), "unit_status_weekly.json", "application/json");
+}
+
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---- CSV import ----
+function parseCsv(text){
+  const table = [];
+  let field = "", row = [], inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n") { row.push(field); table.push(row); row = []; field = ""; }
+      else if (c === "\r") { /* ignore, \n handles the line break */ }
+      else field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); table.push(row); }
+  return table.filter(r => !(r.length === 1 && r[0].trim() === ""));
+}
+
+function importCsvFile(file){
+  const statusEl = document.getElementById("importStatusLabel");
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let text = e.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const table = parseCsv(text);
+      if (table.length < 2) { statusEl.style.color = "var(--rust)"; statusEl.textContent = "ไม่พบข้อมูลในไฟล์ CSV"; return; }
+
+      const headers = table[0].map(h => h.trim());
+      const idx = (name) => headers.indexOf(name);
+      const iWbs = idx("WBS.LV.4"), iProj = idx("Project name"), iTeam = idx("Team"), iMgr = idx("Manager"),
+            iCo = idx("Co"), iSub = idx("Subcontractor"), iPlan = idx("Plan"), iPay = idx("สถานะ Payment"),
+            iRv = idx("RV shipment"), iOnsite = idx("Onsite date"), iF601 = idx("601F"),
+            iLwCode = idx("รหัสสถานะ (Last week)"), iLwDetail = idx("รายละเอียด (Last week)"),
+            iTwCode = idx("รหัสสถานะ (This week)"), iTwDetail = idx("รายละเอียด (This week)");
+
+      if (iWbs < 0 && iTwCode < 0) {
+        statusEl.style.color = "var(--rust)";
+        statusEl.textContent = "ไม่พบหัวคอลัมน์ที่รู้จัก — ไฟล์นี้อาจไม่ได้มาจากเทมเพลตนี้";
+        return;
+      }
+
+      const imported = [];
+      for (let r = 1; r < table.length; r++) {
+        const cells = table[r];
+        if (!cells || cells.every(c => (c || "").trim() === "")) continue;
+        const lwCode = iLwCode >= 0 ? (cells[iLwCode] || "").trim() : "";
+        const twCode = iTwCode >= 0 ? (cells[iTwCode] || "").trim() : "";
+        const lwOpts = detailOptions(lwCode), twOpts = detailOptions(twCode);
+        const lwDetailLabel = iLwDetail >= 0 ? (cells[iLwDetail] || "").trim() : "";
+        const twDetailLabel = iTwDetail >= 0 ? (cells[iTwDetail] || "").trim() : "";
+        const lwSub = lwOpts ? (lwOpts.find(o => o.label === lwDetailLabel)?.key ?? null) : null;
+        const twSub = twOpts ? (twOpts.find(o => o.label === twDetailLabel)?.key ?? null) : null;
+        imported.push({
+          id: uid(), example: false,
+          wbs: iWbs >= 0 ? cells[iWbs] : "",
+          project: iProj >= 0 ? cells[iProj] : "",
+          team: (iTeam >= 0 && cells[iTeam]) ? cells[iTeam].trim() : "A",
+          manager: iMgr >= 0 ? cells[iMgr] : "",
+          co: iCo >= 0 ? cells[iCo] : "",
+          subcon: iSub >= 0 ? cells[iSub] : "",
+          plan: (iPlan >= 0 && cells[iPlan]) ? cells[iPlan].trim() : "No plan",
+          payment: (iPay >= 0 && cells[iPay]) ? cells[iPay].trim() : "เงินผ่าน",
+          rv: iRv >= 0 ? cells[iRv] : "",
+          onsite: iOnsite >= 0 ? cells[iOnsite] : "",
+          f601: iF601 >= 0 ? cells[iF601] : "",
+          lwCode, lwSub, twCode, twSub,
+        });
+      }
+
+      if (imported.length === 0) {
+        statusEl.style.color = "var(--rust)";
+        statusEl.textContent = "ไม่พบแถวข้อมูลที่ใช้งานได้ในไฟล์";
+        return;
+      }
+
+      const replaceAll = document.getElementById("importReplaceCheckbox").checked;
+      rows = replaceAll ? imported : rows.concat(imported);
+      persist();
+      renderTable();
+      computeAndRenderSummary();
+      statusEl.style.color = "var(--rail)";
+      statusEl.textContent = `นำเข้าแล้ว ${imported.length} แถว (${replaceAll ? "แทนที่ข้อมูลเดิมทั้งหมด" : "เพิ่มต่อท้ายข้อมูลเดิม"})`;
+    } catch (err) {
+      statusEl.style.color = "var(--rust)";
+      statusEl.textContent = "อ่านไฟล์ไม่สำเร็จ: " + err.message;
+    }
+  };
+  reader.onerror = () => { statusEl.style.color = "var(--rust)"; statusEl.textContent = "อ่านไฟล์ไม่สำเร็จ"; };
+  reader.readAsText(file, "UTF-8");
+}
+
+document.getElementById("addRowBtn").addEventListener("click", () => {
+  const defTeam = teamFilter === "all" ? "A" : teamFilter;
+  rows.push({ id: uid(), example:false, wbs:"", project:"", team:defTeam, manager:"", co:"", subcon:"",
+    plan:"No plan", payment:"เงินผ่าน", rv:"", onsite:"", f601:"", lwCode:"", lwSub:null, twCode:"", twSub:null });
+  persist(); renderTable(); computeAndRenderSummary();
+});
+document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
+document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
+
+document.getElementById("uploadCsvBtn").addEventListener("click", () => {
+  document.getElementById("uploadCsvInput").click();
+});
+document.getElementById("uploadCsvInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) importCsvFile(file);
+  e.target.value = ""; // allow re-uploading the same file name again
+});
+
+document.getElementById("activePlanSummaryGrid").addEventListener("click", (e) => {
+  const row = e.target.closest(".mgr-row");
+  if (!row) return;
+  const key = row.dataset.key;
+  if (expandedManagers.has(key)) expandedManagers.delete(key);
+  else expandedManagers.add(key);
+  renderActivePlanSummary();
+});
+
+document.getElementById("planTargetInput").addEventListener("input", (e) => {
+  const v = Math.max(0, Number(e.target.value) || 0);
+  planTargets[teamFilter] = v;
+  persist();
+  renderPlanActualCard();
+});
+
+document.getElementById("logWeekBtn").addEventListener("click", logThisWeekEvents);
+
+async function init(){
+  document.getElementById("logDateInput").value = new Date().toISOString().slice(0, 10);
+  try {
+    if (window.storage && window.storage.get) {
+      const res = await window.storage.get(STORAGE_KEY, false);
+      if (res && res.value) {
+        const saved = JSON.parse(res.value);
+        if (Array.isArray(saved)) { rows = saved; }
+        else if (saved && typeof saved === "object") {
+          if (Array.isArray(saved.rows) && saved.rows.length) rows = saved.rows;
+          if (saved.planTargets) planTargets = Object.assign(planTargets, saved.planTargets);
+          if (Array.isArray(saved.eventLog)) eventLog = saved.eventLog;
+        }
+      }
+    }
+  } catch(e) { /* no saved data yet, or storage unavailable — keep default example row */ }
+  renderLegend();
+  renderFlowFilterButtons();
+  renderTeamFilterButtons();
+  renderFiscalYearButtons();
+  renderTable();
+  computeAndRenderSummary();
+  renderFiscalTable();
+}
+init();
+
+// persist on any table edit (delegated, debounced)
+let saveTimer = null;
+document.getElementById("dataBody").addEventListener("input", () => {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { persist(); computeAndRenderSummary(); }, 300);
+});
+document.getElementById("dataBody").addEventListener("change", () => {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { persist(); computeAndRenderSummary(); }, 100);
+});
+</script>
+</body>
+</html>
