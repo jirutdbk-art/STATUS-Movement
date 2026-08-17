@@ -156,7 +156,7 @@
     <div style="flex:1; min-width:220px; padding:16px 18px; border-radius:12px; background:var(--rust-soft);">
       <div class="eyebrow" style="color:var(--rust);">Output — 5030</div>
       <div id="kpiOutputCount" style="font-family:var(--font-mono); font-size:34px; font-weight:700; color:var(--rust); margin-top:4px;">0</div>
-      <div style="font-size:11.5px; color:var(--slate); margin-top:2px;">นับจาก unit ที่ This week = 5030 (ไม่บังคับไล่ตามลำดับสถานะ)</div>
+      <div style="font-size:11.5px; color:var(--slate); margin-top:2px;">นับจาก unit ที่ This week = 5030 และ Last week ≠ 5030 (ไม่นับตัวที่ค้างอยู่ 5030 ต่อเนื่องจากสัปดาห์ที่แล้ว)</div>
     </div>
   </div>
 
@@ -756,7 +756,7 @@ function logThisWeekEvents(){
     if (r.twCode === "9010" && isBlankLastWeek(r.lwCode)) {
       newEntries.push({ id: uid(), date: dateStr, type: "in", wbs: r.wbs, team: r.team || "A" });
     }
-    if (r.twCode === "5030") {
+    if (r.twCode === "5030" && r.lwCode !== "5030") {
       newEntries.push({ id: uid(), date: dateStr, type: "out", wbs: r.wbs, team: r.team || "A" });
     }
   });
@@ -1055,7 +1055,7 @@ function computeAggregates(rowsArr){
       if (r.lwCode) outCounts[r.lwCode] = (outCounts[r.lwCode] || 0) + 1;
     }
     if (r.twCode === "9010" && isBlankLastWeek(r.lwCode)) inputCount++;
-    if (r.twCode === "5030") outputCount++;
+    if (r.twCode === "5030" && r.lwCode !== "5030") outputCount++;
   }
   return { lastByCode, thisByCode, inCounts, outCounts, inputCount, outputCount, totalActive, totalInactive };
 }
