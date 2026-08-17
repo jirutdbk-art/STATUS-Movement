@@ -27,6 +27,9 @@
   button.ghost{ background:transparent; }
   button:hover{ opacity:.85; }
   .table-scroll{ overflow-x:auto; border:1px solid var(--line); border-radius:14px; }
+  .table-pagination{ display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  .table-pagination button{ font-family:var(--font-mono); font-size:12px; padding:6px 10px; border-radius:7px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  .table-pagination button:disabled{ opacity:0.35; cursor:not-allowed; }
   table{ border-collapse:collapse; width:100%; min-width:1900px; font-size:12.5px; }
   thead th{ position:sticky; top:0; background:var(--ink); color:#fff; font-family:var(--font-mono); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; padding:9px 8px; text-align:left; white-space:nowrap; z-index:2; }
   tbody td{ border-bottom:1px solid var(--line); padding:5px 6px; vertical-align:middle; }
@@ -247,6 +250,7 @@
         <tbody id="dataBody"></tbody>
       </table>
     </div>
+    <div id="tablePagination" class="table-pagination"></div>
   </div>
 
   <div class="card">
@@ -363,7 +367,7 @@ function computeMovementDetail(code){
   return { inflow, outflow };
 }
 
-function renderFlowDiagram(){
+function renderFlowDiagram(agg){
   const container = document.getElementById("flowDiagramContainer");
   const selected = selectedFlowStatus;
   const dim = selected ? 0.22 : 0.55;
@@ -386,12 +390,11 @@ function renderFlowDiagram(){
   });
 
   const vr = visibleRows();
-  const totalActive = vr.filter(r => r.twCode && defByCode[r.twCode] && defByCode[r.twCode].active).length;
-  const totalInactive = vr.filter(r => r.twCode && defByCode[r.twCode] && !defByCode[r.twCode].active).length;
+  const a = agg || computeAggregates(vr);
   const totalActiveEl = document.getElementById("totalActiveUnits");
   const totalInactiveEl = document.getElementById("totalInactiveUnits");
-  if (totalActiveEl) totalActiveEl.textContent = totalActive;
-  if (totalInactiveEl) totalInactiveEl.textContent = totalInactive;
+  if (totalActiveEl) totalActiveEl.textContent = a.totalActive;
+  if (totalInactiveEl) totalInactiveEl.textContent = a.totalInactive;
 
   Object.entries(FLOW_LAYOUT).forEach(([code, pos]) => {
     const def = defByCode[code];
@@ -402,8 +405,8 @@ function renderFlowDiagram(){
     const stroke = def.active ? "var(--rail)" : "var(--rust)";
     const strokeW = isSel ? 3 : 1.5;
     const boxOpacity = selected ? (isSel ? 1 : 0.4) : 1;
-    const thisCount = vr.filter(r => r.twCode === code).length;
-    const lastCount = vr.filter(r => r.lwCode === code).length;
+    const thisCount = a.thisByCode[code] || 0;
+    const lastCount = a.lastByCode[code] || 0;
     const countY = y - 9;
     boxParts.push(`<g opacity="${boxOpacity}">`);
     boxParts.push(`<text x="${cx(pos)-4}" y="${countY}" text-anchor="end" font-family="var(--font-mono)" font-weight="800" font-size="${isSel?17:14}" fill="var(--ink)">${thisCount}</text>`);
@@ -419,14 +422,14 @@ function renderFlowDiagram(){
   const permanentParts = [];
   const n9010 = FLOW_LAYOUT["9010"], n5020 = FLOW_LAYOUT["5020"];
   if (n9010) {
-    const permInCount = vr.filter(r => r.twCode === "9010" && isBlankLastWeek(r.lwCode)).length;
+    const permInCount = a.inputCount;
     const py = cy(n9010), sx = -70;
     permanentParts.push(`<line x1="${sx}" y1="${py}" x2="${n9010.x-3}" y2="${py}" stroke="var(--rail)" stroke-width="2.6" marker-end="url(#flowArrowGreen)"/>`);
     permanentParts.push(`<rect x="${sx-2}" y="${py-25}" width="62" height="17" rx="8.5" fill="var(--rail)"/>`);
     permanentParts.push(`<text x="${sx+29}" y="${py-16.5}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">Input ${permInCount}</text>`);
   }
   if (n5020) {
-    const permOutCount = vr.filter(r => r.twCode === "5030").length;
+    const permOutCount = a.outputCount;
     const py2 = cy(n5020), sx2 = n5020.x + n5020.w + 3, ex2 = sx2 + 46;
     permanentParts.push(`<line x1="${sx2}" y1="${py2}" x2="${ex2}" y2="${py2}" stroke="var(--rust)" stroke-width="2.6" marker-end="url(#flowArrowRust)"/>`);
     permanentParts.push(`<rect x="${ex2-6}" y="${py2-25}" width="76" height="17" rx="8.5" fill="var(--rust)"/>`);
@@ -511,7 +514,7 @@ function renderFlowDiagram(){
 // ---- Last week vs This week line chart ----
 let selectedChartPoint = null; // {code, week}
 
-function renderLineChart(){
+function renderLineChart(agg){
   const container = document.getElementById("lineChartContainer");
   const n = STATUS_DEFS.length;
   const leftM = 50, rightM = 30, topM = 24, chartW = 850 - leftM - rightM, chartH = 190;
@@ -519,10 +522,11 @@ function renderLineChart(){
   const step = n > 1 ? chartW / (n - 1) : 0;
 
   const vr = visibleRows();
+  const a = agg || computeAggregates(vr);
   const counts = STATUS_DEFS.map(d => ({
     code: d.code,
-    last: vr.filter(r => r.lwCode === d.code).length,
-    thisW: vr.filter(r => r.twCode === d.code).length,
+    last: a.lastByCode[d.code] || 0,
+    thisW: a.thisByCode[d.code] || 0,
   }));
   const maxVal = Math.max(1, ...counts.map(c => Math.max(c.last, c.thisW)));
   const yFor = (v) => baseY - (v / maxVal) * chartH;
@@ -586,8 +590,15 @@ function renderActivePlanSummary(){
   const vr = visibleRows();
   const activeStatuses = STATUS_DEFS.filter(d => d.active);
 
+  const unitsByCode = {};
+  for (let i = 0; i < vr.length; i++) {
+    const r = vr[i];
+    if (!r.twCode) continue;
+    (unitsByCode[r.twCode] || (unitsByCode[r.twCode] = [])).push(r);
+  }
+
   box.innerHTML = activeStatuses.map(d => {
-    const units = vr.filter(r => r.twCode === d.code);
+    const units = unitsByCode[d.code] || [];
     const total = units.length;
     if (total === 0) {
       return `<div class="active-plan-box">
@@ -904,10 +915,21 @@ function renderLegend(){
   });
 }
 
+let tablePage = 1;
+let tablePageSize = 50;
+
 function renderTable(){
   const body = document.getElementById("dataBody");
   body.innerHTML = "";
-  visibleRows().forEach((r) => {
+  const vr = visibleRows();
+  const totalPages = Math.max(1, Math.ceil(vr.length / tablePageSize));
+  if (tablePage > totalPages) tablePage = totalPages;
+  if (tablePage < 1) tablePage = 1;
+  const startIdx = (tablePage - 1) * tablePageSize;
+  const pageRows = vr.slice(startIdx, startIdx + tablePageSize);
+
+  const frag = document.createDocumentFragment();
+  pageRows.forEach((r) => {
     const tr = document.createElement("tr");
     if (r.example) tr.classList.add("example-row");
 
@@ -982,30 +1004,68 @@ function renderTable(){
     tdRemove.appendChild(rmBtn);
     tr.appendChild(tdRemove);
 
-    body.appendChild(tr);
+    frag.appendChild(tr);
   });
-  const vCount = visibleRows().length;
+  body.appendChild(frag);
+
+  const vCount = vr.length;
   document.getElementById("rowCountLabel").textContent = teamFilter === "all" ? `${rows.length} หน่วย` : `${vCount} / ${rows.length} หน่วย (Team ${teamFilter})`;
+  renderTablePagination(vr.length, totalPages);
+}
+
+function renderTablePagination(total, totalPages){
+  const box = document.getElementById("tablePagination");
+  if (!box) return;
+  if (total <= tablePageSize) { box.innerHTML = ""; return; }
+  const startN = (tablePage - 1) * tablePageSize + 1;
+  const endN = Math.min(total, tablePage * tablePageSize);
+  box.innerHTML = `
+    <button id="pgFirst" ${tablePage===1?"disabled":""}>« แรก</button>
+    <button id="pgPrev" ${tablePage===1?"disabled":""}>‹ ก่อนหน้า</button>
+    <span style="font-family:var(--font-mono); font-size:12px; color:var(--slate); padding:0 8px;">แสดง ${startN}–${endN} จาก ${total} · หน้า ${tablePage}/${totalPages}</span>
+    <button id="pgNext" ${tablePage===totalPages?"disabled":""}>ถัดไป ›</button>
+    <button id="pgLast" ${tablePage===totalPages?"disabled":""}>สุดท้าย »</button>
+    <select id="pgSize" style="margin-left:8px; padding:5px 8px; border-radius:7px; border:1px solid var(--line); font-size:12px;">
+      ${[25,50,100,200].map(n => `<option value="${n}" ${n===tablePageSize?"selected":""}>${n} แถว/หน้า</option>`).join("")}
+    </select>`;
+  document.getElementById("pgFirst").addEventListener("click", () => { tablePage = 1; renderTable(); });
+  document.getElementById("pgPrev").addEventListener("click", () => { tablePage = Math.max(1, tablePage - 1); renderTable(); });
+  document.getElementById("pgNext").addEventListener("click", () => { tablePage = Math.min(totalPages, tablePage + 1); renderTable(); });
+  document.getElementById("pgLast").addEventListener("click", () => { tablePage = totalPages; renderTable(); });
+  document.getElementById("pgSize").addEventListener("change", (e) => { tablePageSize = Number(e.target.value); tablePage = 1; renderTable(); });
 }
 
 function isBlankLastWeek(code){
   return !code || code === "" || code === "N/A";
 }
 
-function computeAndRenderKpi(){
-  const vr = visibleRows();
-  const inputCount = vr.filter(r => r.twCode === "9010" && isBlankLastWeek(r.lwCode)).length;
-  const outputCount = vr.filter(r => r.twCode === "5030").length;
-  document.getElementById("kpiInputCount").textContent = inputCount;
-  document.getElementById("kpiOutputCount").textContent = outputCount;
-  renderPlanActualCard();
+function computeAggregates(rowsArr){
+  const lastByCode = {}, thisByCode = {}, inCounts = {}, outCounts = {};
+  let inputCount = 0, outputCount = 0, totalActive = 0, totalInactive = 0;
+  for (let i = 0; i < rowsArr.length; i++) {
+    const r = rowsArr[i];
+    if (r.lwCode) lastByCode[r.lwCode] = (lastByCode[r.lwCode] || 0) + 1;
+    if (r.twCode) {
+      thisByCode[r.twCode] = (thisByCode[r.twCode] || 0) + 1;
+      const def = defByCode[r.twCode];
+      if (def) { if (def.active) totalActive++; else totalInactive++; }
+    }
+    if (r.twCode && r.lwCode !== r.twCode) {
+      inCounts[r.twCode] = (inCounts[r.twCode] || 0) + 1;
+      if (r.lwCode) outCounts[r.lwCode] = (outCounts[r.lwCode] || 0) + 1;
+    }
+    if (r.twCode === "9010" && isBlankLastWeek(r.lwCode)) inputCount++;
+    if (r.twCode === "5030") outputCount++;
+  }
+  return { lastByCode, thisByCode, inCounts, outCounts, inputCount, outputCount, totalActive, totalInactive };
 }
 
-function movementFor(code){
+function computeAndRenderKpi(agg){
   const vr = visibleRows();
-  const inCount = vr.filter(r => r.twCode === code && r.lwCode !== code).length;
-  const outCount = vr.filter(r => r.lwCode === code && r.twCode !== code).length;
-  return { inCount, outCount };
+  const a = agg || computeAggregates(vr);
+  document.getElementById("kpiInputCount").textContent = a.inputCount;
+  document.getElementById("kpiOutputCount").textContent = a.outputCount;
+  renderPlanActualCard();
 }
 
 function computeAndRenderSummary(){
@@ -1013,13 +1073,15 @@ function computeAndRenderSummary(){
   body.innerHTML = "";
   let totalLast = 0, totalThis = 0, totalIn = 0, totalOut = 0;
   const vr = visibleRows();
+  const agg = computeAggregates(vr);
 
-  const stats = STATUS_DEFS.map(d => {
-    const last = vr.filter(r => r.lwCode === d.code).length;
-    const thisW = vr.filter(r => r.twCode === d.code).length;
-    const { inCount, outCount } = movementFor(d.code);
-    return { d, last, thisW, inCount, outCount };
-  });
+  const stats = STATUS_DEFS.map(d => ({
+    d,
+    last: agg.lastByCode[d.code] || 0,
+    thisW: agg.thisByCode[d.code] || 0,
+    inCount: agg.inCounts[d.code] || 0,
+    outCount: agg.outCounts[d.code] || 0,
+  }));
   const maxMove = Math.max(1, ...stats.map(s => Math.max(s.inCount, s.outCount)));
   const barMax = 70;
 
@@ -1064,9 +1126,9 @@ function computeAndRenderSummary(){
     <td class="num">${totalDelta > 0 ? "+"+totalDelta : totalDelta}</td>
     <td></td>`;
   body.appendChild(totalTr);
-  computeAndRenderKpi();
-  renderFlowDiagram();
-  renderLineChart();
+  computeAndRenderKpi(agg);
+  renderFlowDiagram(agg);
+  renderLineChart(agg);
   renderChartDetailList();
   renderActivePlanSummary();
 }
@@ -1134,23 +1196,39 @@ function parseCsv(text){
 
 function importCsvFile(file){
   const statusEl = document.getElementById("importStatusLabel");
+  const btn = document.getElementById("uploadCsvBtn");
+  statusEl.style.color = "var(--slate)";
+  statusEl.textContent = "กำลังอ่านไฟล์...";
+  if (btn) { btn.disabled = true; btn.textContent = "กำลังนำเข้า..."; }
   const reader = new FileReader();
   reader.onload = (e) => {
-    try {
-      let text = e.target.result;
-      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-      const table = parseCsv(text);
-      if (table.length < 2) { statusEl.style.color = "var(--rust)"; statusEl.textContent = "ไม่พบข้อมูลในไฟล์ CSV"; return; }
+    // Yield one frame so the "กำลังอ่านไฟล์..." state actually paints before the
+    // synchronous parse/render work below runs (avoids the tab looking frozen).
+    setTimeout(() => processImportedCsvText(e.target.result, statusEl, btn), 30);
+  };
+  reader.onerror = () => {
+    statusEl.style.color = "var(--rust)"; statusEl.textContent = "อ่านไฟล์ไม่สำเร็จ";
+    if (btn) { btn.disabled = false; btn.textContent = "⬆ อัปโหลด CSV"; }
+  };
+  reader.readAsText(file, "UTF-8");
+}
 
-      const headers = table[0].map(h => h.trim());
-      const idx = (name) => headers.indexOf(name);
-      const iWbs = idx("WBS.LV.4"), iProj = idx("Project name"), iTeam = idx("Team"), iMgr = idx("Manager"),
-            iCo = idx("Co"), iSub = idx("Subcontractor"), iPlan = idx("Plan"), iPay = idx("สถานะ Payment"),
-            iRv = idx("RV shipment"), iOnsite = idx("Onsite date"), iF601 = idx("601F"),
-            iLwCode = idx("รหัสสถานะ (Last week)"), iLwDetail = idx("รายละเอียด (Last week)"),
-            iTwCode = idx("รหัสสถานะ (This week)"), iTwDetail = idx("รายละเอียด (This week)");
+function processImportedCsvText(rawText, statusEl, btn){
+  try {
+    let text = rawText;
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const table = parseCsv(text);
+    if (table.length < 2) { statusEl.style.color = "var(--rust)"; statusEl.textContent = "ไม่พบข้อมูลในไฟล์ CSV"; return; }
 
-      if (iWbs < 0 && iTwCode < 0) {
+    const headers = table[0].map(h => h.trim());
+    const idx = (name) => headers.indexOf(name);
+    const iWbs = idx("WBS.LV.4"), iProj = idx("Project name"), iTeam = idx("Team"), iMgr = idx("Manager"),
+          iCo = idx("Co"), iSub = idx("Subcontractor"), iPlan = idx("Plan"), iPay = idx("สถานะ Payment"),
+          iRv = idx("RV shipment"), iOnsite = idx("Onsite date"), iF601 = idx("601F"),
+          iLwCode = idx("รหัสสถานะ (Last week)"), iLwDetail = idx("รายละเอียด (Last week)"),
+          iTwCode = idx("รหัสสถานะ (This week)"), iTwDetail = idx("รายละเอียด (This week)");
+
+    if (iWbs < 0 && iTwCode < 0) {
         statusEl.style.color = "var(--rust)";
         statusEl.textContent = "ไม่พบหัวคอลัมน์ที่รู้จัก — ไฟล์นี้อาจไม่ได้มาจากเทมเพลตนี้";
         return;
@@ -1184,26 +1262,26 @@ function importCsvFile(file){
         });
       }
 
-      if (imported.length === 0) {
-        statusEl.style.color = "var(--rust)";
-        statusEl.textContent = "ไม่พบแถวข้อมูลที่ใช้งานได้ในไฟล์";
-        return;
-      }
-
-      const replaceAll = document.getElementById("importReplaceCheckbox").checked;
-      rows = replaceAll ? imported : rows.concat(imported);
-      persist();
-      renderTable();
-      computeAndRenderSummary();
-      statusEl.style.color = "var(--rail)";
-      statusEl.textContent = `นำเข้าแล้ว ${imported.length} แถว (${replaceAll ? "แทนที่ข้อมูลเดิมทั้งหมด" : "เพิ่มต่อท้ายข้อมูลเดิม"})`;
-    } catch (err) {
+    if (imported.length === 0) {
       statusEl.style.color = "var(--rust)";
-      statusEl.textContent = "อ่านไฟล์ไม่สำเร็จ: " + err.message;
+      statusEl.textContent = "ไม่พบแถวข้อมูลที่ใช้งานได้ในไฟล์";
+      return;
     }
-  };
-  reader.onerror = () => { statusEl.style.color = "var(--rust)"; statusEl.textContent = "อ่านไฟล์ไม่สำเร็จ"; };
-  reader.readAsText(file, "UTF-8");
+
+    const replaceAll = document.getElementById("importReplaceCheckbox").checked;
+    rows = replaceAll ? imported : rows.concat(imported);
+    tablePage = 1;
+    persist();
+    renderTable();
+    computeAndRenderSummary();
+    statusEl.style.color = "var(--rail)";
+    statusEl.textContent = `นำเข้าแล้ว ${imported.length} แถว (${replaceAll ? "แทนที่ข้อมูลเดิมทั้งหมด" : "เพิ่มต่อท้ายข้อมูลเดิม"})`;
+  } catch (err) {
+    statusEl.style.color = "var(--rust)";
+    statusEl.textContent = "อ่านไฟล์ไม่สำเร็จ: " + err.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "⬆ อัปโหลด CSV"; }
+  }
 }
 
 document.getElementById("addRowBtn").addEventListener("click", () => {
