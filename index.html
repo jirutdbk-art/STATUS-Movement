@@ -438,13 +438,18 @@ function renderFlowDiagram(agg){
   }
 
   let summaryHtml = "";
+  const MAX_ARROWS = 3;
   if (selected && FLOW_LAYOUT[selected]) {
     const { inflow, outflow } = computeMovementDetail(selected);
     const target = FLOW_LAYOUT[selected];
-    const inEntries = Object.entries(inflow);
-    const outEntries = Object.entries(outflow);
+    const inEntries = Object.entries(inflow).sort((a, b) => b[1] - a[1]);
+    const outEntries = Object.entries(outflow).sort((a, b) => b[1] - a[1]);
+    const inDrawn = inEntries.slice(0, MAX_ARROWS);
+    const outDrawn = outEntries.slice(0, MAX_ARROWS);
+    const inHidden = inEntries.length - inDrawn.length;
+    const outHidden = outEntries.length - outDrawn.length;
 
-    inEntries.forEach(([src, count], i) => {
+    inDrawn.forEach(([src, count], i) => {
       const bend = -46 - i * 14;
       if (src === "__NEW__") {
         const startX = Math.max(6, target.x - 46), startY = cy(target) - 30 - i * 8;
@@ -460,8 +465,11 @@ function renderFlowDiagram(agg){
       movementParts.push(`<rect x="${midX-16}" y="${midY-9}" width="32" height="16" rx="8" fill="var(--rail)"/>`);
       movementParts.push(`<text x="${midX}" y="${midY-1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">${count}</text>`);
     });
+    if (inHidden > 0) {
+      movementParts.push(`<text x="${cx(target)-4}" y="${cy(target)-38}" text-anchor="end" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="var(--rail)">+${inHidden} อื่นๆ</text>`);
+    }
 
-    outEntries.forEach(([dst, count], i) => {
+    outDrawn.forEach(([dst, count], i) => {
       const bend = 46 + i * 14;
       const d = FLOW_LAYOUT[dst];
       if (!d) return;
@@ -470,16 +478,40 @@ function renderFlowDiagram(agg){
       movementParts.push(`<rect x="${midX-16}" y="${midY-9}" width="32" height="16" rx="8" fill="var(--rust)"/>`);
       movementParts.push(`<text x="${midX}" y="${midY-1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">${count}</text>`);
     });
+    if (outHidden > 0) {
+      movementParts.push(`<text x="${cx(target)+4}" y="${cy(target)+50}" text-anchor="start" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="var(--rust)">+${outHidden} อื่นๆ</text>`);
+    }
 
     const totalIn = inEntries.reduce((s, [,c]) => s + c, 0);
     const totalOut = outEntries.reduce((s, [,c]) => s + c, 0);
-    const inList = inEntries.length
-      ? inEntries.map(([src, c]) => src === "__NEW__" ? `ใหม่ ${c}` : `${flowLabel(src)} ${c}`).join(", ")
-      : "ไม่มี";
-    const outList = outEntries.length
-      ? outEntries.map(([dst, c]) => `${flowLabel(dst)} ${c}`).join(", ")
-      : "ไม่มี";
-    summaryHtml = `สถานะ <b>${selected} · ${defByCode[selected].name}</b> — เข้ารวม <b style="color:var(--rail);">${totalIn}</b> ตัว (จาก: ${inList}) &nbsp;·&nbsp; ออกรวม <b style="color:var(--rust);">${totalOut}</b> ตัว (ไปยัง: ${outList})`;
+    const maxSide = Math.max(1, ...inEntries.map(e => e[1]), ...outEntries.map(e => e[1]));
+    const listRow = (label, count, tone) => `
+      <div style="display:flex; align-items:center; gap:8px; padding:3px 0;">
+        <span style="flex:0 0 auto; min-width:120px; font-size:12px; color:var(--ink);">${label}</span>
+        <span style="flex:1; height:7px; border-radius:4px; background:var(--paper); overflow:hidden;">
+          <span style="display:block; height:100%; width:${Math.round((count / maxSide) * 100)}%; background:${tone};"></span>
+        </span>
+        <span style="flex:0 0 30px; text-align:right; font-family:var(--font-mono); font-weight:700; font-size:12px; color:${tone};">${count}</span>
+      </div>`;
+    const inRows = inEntries.length
+      ? inEntries.map(([src, c]) => listRow(src === "__NEW__" ? "ใหม่ (ไม่มีสถานะเดิม)" : flowLabel(src), c, "var(--rail)")).join("")
+      : `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
+    const outRows = outEntries.length
+      ? outEntries.map(([dst, c]) => listRow(flowLabel(dst), c, "var(--rust)")).join("")
+      : `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
+
+    summaryHtml = `
+      <div style="font-size:13px; margin-bottom:10px;">สถานะ <b>${selected} · ${defByCode[selected].name}</b> — เข้ารวม <b style="color:var(--rail);">${totalIn}</b> ตัว · ออกรวม <b style="color:var(--rust);">${totalOut}</b> ตัว</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:16px;">
+        <div>
+          <div class="eyebrow" style="color:var(--rail); margin-bottom:4px;">เข้า (In) — มาจาก</div>
+          ${inRows}
+        </div>
+        <div>
+          <div class="eyebrow" style="color:var(--rust); margin-bottom:4px;">ออก (Out) — ไปยัง</div>
+          ${outRows}
+        </div>
+      </div>`;
   } else {
     summaryHtml = "เลือกสถานะด้านบนเพื่อดูรายละเอียดการเคลื่อนไหวเข้า-ออกของสถานะนั้น";
   }
