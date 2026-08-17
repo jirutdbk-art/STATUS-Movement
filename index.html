@@ -70,6 +70,8 @@
   .chart-empty-hint{ font-size:12px; color:var(--slate); }
   .movement-arrow{ stroke-dasharray:6 5; animation:flowDash 0.9s linear infinite; }
   @keyframes flowDash{ to{ stroke-dashoffset:-22; } }
+  .movement-badge{ transform-box:fill-box; transform-origin:center; animation:badgePulse 1.3s ease-in-out infinite; }
+  @keyframes badgePulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.18); } }
   .active-plan-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
   .active-plan-box{ border:1px solid var(--rail-soft); border-radius:12px; padding:12px 14px; background:#fcfefd; overflow:hidden; }
   .active-plan-box-header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
@@ -396,6 +398,15 @@ function renderFlowDiagram(agg){
   if (totalActiveEl) totalActiveEl.textContent = a.totalActive;
   if (totalInactiveEl) totalInactiveEl.textContent = a.totalInactive;
 
+  // Compute movement (in/out) for the selected status up front so we can
+  // highlight the related nodes directly instead of drawing crossing arrows.
+  let inflowMap = {}, outflowMap = {}, newInCount = 0;
+  if (selected && FLOW_LAYOUT[selected]) {
+    const { inflow, outflow } = computeMovementDetail(selected);
+    Object.entries(inflow).forEach(([src, c]) => { if (src === "__NEW__") newInCount = c; else inflowMap[src] = c; });
+    outflowMap = outflow;
+  }
+
   Object.entries(FLOW_LAYOUT).forEach(([code, pos]) => {
     const def = defByCode[code];
     const isSel = code === selected;
@@ -404,7 +415,7 @@ function renderFlowDiagram(agg){
     const fill = def.active ? "var(--rail-soft)" : "var(--rust-soft)";
     const stroke = def.active ? "var(--rail)" : "var(--rust)";
     const strokeW = isSel ? 3 : 1.5;
-    const boxOpacity = selected ? (isSel ? 1 : 0.4) : 1;
+    const boxOpacity = selected ? (isSel || inflowMap[code] || outflowMap[code] ? 1 : 0.35) : 1;
     const thisCount = a.thisByCode[code] || 0;
     const lastCount = a.lastByCode[code] || 0;
     const countY = y - 9;
@@ -415,6 +426,19 @@ function renderFlowDiagram(agg){
     boxParts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`);
     const fontSize = isSel ? 14.5 : (pos.w <= 62 ? 13 : 12.5);
     boxParts.push(`<text x="${cx(pos)}" y="${cy(pos)+1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-weight="700" font-size="${fontSize}" fill="${stroke}">${code}</text>`);
+
+    // Ring + count badge instead of a crossing arrow — no overlap no matter how many statuses are involved.
+    if (inflowMap[code]) {
+      boxParts.push(`<rect class="movement-arrow" x="${x-6}" y="${y-6}" width="${w+12}" height="${h+12}" rx="13" fill="none" stroke="var(--rail)" stroke-width="2"/>`);
+      boxParts.push(`<circle class="movement-badge" cx="${x+w+1}" cy="${y-1}" r="9.5" fill="var(--rail)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
+      boxParts.push(`<text x="${x+w+1}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#fff">${inflowMap[code]}</text>`);
+    }
+    if (outflowMap[code]) {
+      const ringPad = inflowMap[code] ? 10 : 6;
+      boxParts.push(`<rect class="movement-arrow" x="${x-ringPad}" y="${y-ringPad}" width="${w+ringPad*2}" height="${h+ringPad*2}" rx="${13+(ringPad-6)}" fill="none" stroke="var(--rust)" stroke-width="2"/>`);
+      boxParts.push(`<circle class="movement-badge" cx="${x+w+1}" cy="${y+h+1}" r="9.5" fill="var(--rust)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
+      boxParts.push(`<text x="${x+w+1}" y="${y+h+2}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#fff">${outflowMap[code]}</text>`);
+    }
     boxParts.push(`</g>`);
   });
 
@@ -438,53 +462,12 @@ function renderFlowDiagram(agg){
   }
 
   let summaryHtml = "";
-  const MAX_ARROWS = 3;
   if (selected && FLOW_LAYOUT[selected]) {
-    const { inflow, outflow } = computeMovementDetail(selected);
-    const target = FLOW_LAYOUT[selected];
-    const inEntries = Object.entries(inflow).sort((a, b) => b[1] - a[1]);
-    const outEntries = Object.entries(outflow).sort((a, b) => b[1] - a[1]);
-    const inDrawn = inEntries.slice(0, MAX_ARROWS);
-    const outDrawn = outEntries.slice(0, MAX_ARROWS);
-    const inHidden = inEntries.length - inDrawn.length;
-    const outHidden = outEntries.length - outDrawn.length;
-
-    inDrawn.forEach(([src, count], i) => {
-      const bend = -46 - i * 14;
-      if (src === "__NEW__") {
-        const startX = Math.max(6, target.x - 46), startY = cy(target) - 30 - i * 8;
-        movementParts.push(`<path class="movement-arrow" d="M${startX} ${startY}Q${startX+20} ${cy(target)} ${cx(target)-2} ${cy(target)-4}" fill="none" stroke="var(--rail)" stroke-width="2.4" marker-end="url(#flowArrowGreen)"/>`);
-        movementParts.push(`<rect x="${startX-2}" y="${startY-13}" width="46" height="16" rx="8" fill="var(--rail)"/>`);
-        movementParts.push(`<text x="${startX+21}" y="${startY-5}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">New ${count}</text>`);
-        return;
-      }
-      const s = FLOW_LAYOUT[src];
-      if (!s) return;
-      const midX = (cx(s) + cx(target)) / 2, midY = (cy(s) + cy(target)) / 2 + bend;
-      movementParts.push(`<path class="movement-arrow" d="M${cx(s)} ${cy(s)}Q${midX} ${midY} ${cx(target)} ${cy(target)}" fill="none" stroke="var(--rail)" stroke-width="2.4" marker-end="url(#flowArrowGreen)"/>`);
-      movementParts.push(`<rect x="${midX-16}" y="${midY-9}" width="32" height="16" rx="8" fill="var(--rail)"/>`);
-      movementParts.push(`<text x="${midX}" y="${midY-1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">${count}</text>`);
-    });
-    if (inHidden > 0) {
-      movementParts.push(`<text x="${cx(target)-4}" y="${cy(target)-38}" text-anchor="end" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="var(--rail)">+${inHidden} อื่นๆ</text>`);
-    }
-
-    outDrawn.forEach(([dst, count], i) => {
-      const bend = 46 + i * 14;
-      const d = FLOW_LAYOUT[dst];
-      if (!d) return;
-      const midX = (cx(target) + cx(d)) / 2, midY = (cy(target) + cy(d)) / 2 + bend;
-      movementParts.push(`<path class="movement-arrow" d="M${cx(target)} ${cy(target)}Q${midX} ${midY} ${cx(d)} ${cy(d)}" fill="none" stroke="var(--rust)" stroke-width="2.4" marker-end="url(#flowArrowRust)"/>`);
-      movementParts.push(`<rect x="${midX-16}" y="${midY-9}" width="32" height="16" rx="8" fill="var(--rust)"/>`);
-      movementParts.push(`<text x="${midX}" y="${midY-1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="#fff">${count}</text>`);
-    });
-    if (outHidden > 0) {
-      movementParts.push(`<text x="${cx(target)+4}" y="${cy(target)+50}" text-anchor="start" font-family="var(--font-mono)" font-size="10" font-weight="700" fill="var(--rust)">+${outHidden} อื่นๆ</text>`);
-    }
-
-    const totalIn = inEntries.reduce((s, [,c]) => s + c, 0);
+    const inEntries = Object.entries(inflowMap).sort((a2, b2) => b2[1] - a2[1]);
+    const outEntries = Object.entries(outflowMap).sort((a2, b2) => b2[1] - a2[1]);
+    const totalIn = inEntries.reduce((s, [,c]) => s + c, 0) + newInCount;
     const totalOut = outEntries.reduce((s, [,c]) => s + c, 0);
-    const maxSide = Math.max(1, ...inEntries.map(e => e[1]), ...outEntries.map(e => e[1]));
+    const maxSide = Math.max(1, newInCount, ...inEntries.map(e => e[1]), ...outEntries.map(e => e[1]));
     const listRow = (label, count, tone) => `
       <div style="display:flex; align-items:center; gap:8px; padding:3px 0;">
         <span style="flex:0 0 auto; min-width:120px; font-size:12px; color:var(--ink);">${label}</span>
@@ -493,22 +476,22 @@ function renderFlowDiagram(agg){
         </span>
         <span style="flex:0 0 30px; text-align:right; font-family:var(--font-mono); font-weight:700; font-size:12px; color:${tone};">${count}</span>
       </div>`;
-    const inRows = inEntries.length
-      ? inEntries.map(([src, c]) => listRow(src === "__NEW__" ? "ใหม่ (ไม่มีสถานะเดิม)" : flowLabel(src), c, "var(--rail)")).join("")
-      : `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
+    let inRows = newInCount ? listRow("ใหม่ (ไม่มีสถานะเดิม)", newInCount, "var(--rail)") : "";
+    inRows += inEntries.map(([src, c]) => listRow(flowLabel(src), c, "var(--rail)")).join("");
+    if (!inRows) inRows = `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
     const outRows = outEntries.length
       ? outEntries.map(([dst, c]) => listRow(flowLabel(dst), c, "var(--rust)")).join("")
       : `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
 
     summaryHtml = `
-      <div style="font-size:13px; margin-bottom:10px;">สถานะ <b>${selected} · ${defByCode[selected].name}</b> — เข้ารวม <b style="color:var(--rail);">${totalIn}</b> ตัว · ออกรวม <b style="color:var(--rust);">${totalOut}</b> ตัว</div>
+      <div style="font-size:13px; margin-bottom:10px;">สถานะ <b>${selected} · ${defByCode[selected].name}</b> — วงแหวนเขียวรอบกล่อง = สถานะที่มีการเข้ามา · วงแหวนแดง = สถานะที่ไหลออกไป (ตัวเลขในวงกลมคือจำนวน)</div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:16px;">
         <div>
-          <div class="eyebrow" style="color:var(--rail); margin-bottom:4px;">เข้า (In) — มาจาก</div>
+          <div class="eyebrow" style="color:var(--rail); margin-bottom:4px;">เข้า (In) รวม ${totalIn} — มาจาก</div>
           ${inRows}
         </div>
         <div>
-          <div class="eyebrow" style="color:var(--rust); margin-bottom:4px;">ออก (Out) — ไปยัง</div>
+          <div class="eyebrow" style="color:var(--rust); margin-bottom:4px;">ออก (Out) รวม ${totalOut} — ไปยัง</div>
           ${outRows}
         </div>
       </div>`;
