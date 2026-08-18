@@ -1079,7 +1079,7 @@ function computeAggregates(rowsArr){
     if (r.twCode) {
       thisByCode[r.twCode] = (thisByCode[r.twCode] || 0) + 1;
       const def = defByCode[r.twCode];
-      if (def) { if (def.active) totalActive++; else totalInactive++; }
+      if (def) { if (def.active && r.twCode !== "5030") totalActive++; else if (!def.active) totalInactive++; }
     }
     if (r.twCode && r.lwCode !== r.twCode) {
       inCounts[r.twCode] = (inCounts[r.twCode] || 0) + 1;
