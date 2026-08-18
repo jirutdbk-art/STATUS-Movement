@@ -599,6 +599,16 @@ function handleChartPointClick(code, week){
 const escapeHtml = (s) => (s || "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 let expandedManagers = new Set();
 
+function stackedBar(have, no){
+  const total = have + no;
+  if (total === 0) return `<div style="width:56px; height:8px; border-radius:4px; background:var(--paper); border:1px solid var(--line);"></div>`;
+  const haveW = Math.round((have / total) * 100);
+  return `<div style="display:flex; width:56px; height:8px; border-radius:4px; overflow:hidden;" title="Have plan ${have} · No plan ${no}">
+    <div style="width:${haveW}%; background:var(--rail);"></div>
+    <div style="width:${100-haveW}%; background:var(--rust);"></div>
+  </div>`;
+}
+
 function renderActivePlanSummary(){
   const box = document.getElementById("activePlanSummaryGrid");
   if (!box) return;
@@ -643,20 +653,24 @@ function renderActivePlanSummary(){
           <td><span class="mgr-caret">${isOpen ? "▾" : "▸"}</span>${escapeHtml(mgr)}</td>
           <td class="num" style="color:var(--rail);">${c.have}</td>
           <td class="num" style="color:var(--rust);">${c.no}</td>
-          <td class="num">${c.have + c.no}</td>
+          <td>${stackedBar(c.have, c.no)}</td>
         </tr>`;
         if (!isOpen) return mainRow;
-        const subRows = c.units
-          .slice()
-          .sort((a, b) => (a.plan === "Have plan" ? 1 : 0) - (b.plan === "Have plan" ? 1 : 0))
-          .map(u => {
-            const isNoPlan = u.plan !== "Have plan";
-            const co = u.co && u.co.trim() ? u.co.trim() : "(ไม่ระบุ Co)";
-            return `<tr class="mgr-sub-row">
-              <td colspan="2" style="padding-left:20px; color:${isNoPlan ? "var(--rust)" : "var(--slate)"};">${escapeHtml(co)} <span style="color:var(--slate); font-family:var(--font-mono); font-size:10px;">(${escapeHtml(u.wbs||"—")})</span></td>
-              <td colspan="2" class="num" style="color:${isNoPlan ? "var(--rust)" : "var(--rail)"}; font-weight:${isNoPlan ? "700" : "500"};">${isNoPlan ? "No plan" : "Have plan"}</td>
-            </tr>`;
-          }).join("");
+        // Group this manager's units by Co, counting Have plan / No plan per Co.
+        const byCo = {};
+        c.units.forEach(u => {
+          const co = u.co && u.co.trim() ? u.co.trim() : "(ไม่ระบุ Co)";
+          if (!byCo[co]) byCo[co] = { have: 0, no: 0 };
+          if (u.plan === "Have plan") byCo[co].have++; else byCo[co].no++;
+        });
+        const subRows = Object.entries(byCo)
+          .sort((a2, b2) => b2[1].no - a2[1].no)
+          .map(([co, cc]) => `<tr class="mgr-sub-row">
+              <td style="padding-left:20px;">${escapeHtml(co)}</td>
+              <td class="num" style="color:var(--rail);">${cc.have}</td>
+              <td class="num" style="color:var(--rust);">${cc.no}</td>
+              <td>${stackedBar(cc.have, cc.no)}</td>
+            </tr>`).join("");
         return mainRow + subRows;
       })
       .join("");
@@ -667,10 +681,10 @@ function renderActivePlanSummary(){
       </div>
       <div style="font-size:11.5px; color:var(--ink); font-weight:600; margin-bottom:6px;">${d.name} · This week</div>
       <table class="active-plan-mgr-table">
-        <thead><tr><th>Manager</th><th style="text-align:center;">Have plan</th><th style="text-align:center;">No plan</th><th style="text-align:center;">รวม</th></tr></thead>
+        <thead><tr><th>Manager</th><th style="text-align:center;">Have</th><th style="text-align:center;">No</th><th style="text-align:center;">สัดส่วน</th></tr></thead>
         <tbody>
           ${mgrRows}
-          <tr class="plan-total-row"><td>รวมทั้งหมด</td><td class="num" style="color:var(--rail);">${totalHave}</td><td class="num" style="color:var(--rust);">${totalNo}</td><td class="num">${total}</td></tr>
+          <tr class="plan-total-row"><td>รวมทั้งหมด</td><td class="num" style="color:var(--rail);">${totalHave}</td><td class="num" style="color:var(--rust);">${totalNo}</td><td>${stackedBar(totalHave, totalNo)}</td></tr>
         </tbody>
       </table>
     </div>`;
@@ -1051,7 +1065,9 @@ function renderTablePagination(total, totalPages){
 }
 
 function isBlankLastWeek(code){
-  return !code || code === "" || code === "N/A";
+  if (!code) return true;
+  const c = code.toString().trim().toUpperCase();
+  return c === "" || c === "N/A" || c === "#N/A" || c === "NA" || c === "-";
 }
 
 function computeAggregates(rowsArr){
