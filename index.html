@@ -1252,12 +1252,17 @@ function processImportedCsvText(rawText, statusEl, btn){
     if (table.length < 2) { statusEl.style.color = "var(--rust)"; statusEl.textContent = "ไม่พบข้อมูลในไฟล์ CSV"; return; }
 
     const headers = table[0].map(h => h.trim());
-    const idx = (name) => headers.indexOf(name);
+    const headersNorm = headers.map(h => h.trim().toLowerCase());
+    const idx = (name) => headersNorm.indexOf(name.trim().toLowerCase());
     const iWbs = idx("WBS.LV.4"), iProj = idx("Project name"), iTeam = idx("Team"), iMgr = idx("Manager"),
-          iCo = idx("Co"), iSub = idx("Subcontractor"), iPlan = idx("Plan"), iPay = idx("สถานะ Payment"),
+          iCo = idx("Co"), iSub = idx("Subcontractor"), iPay = idx("สถานะ Payment"),
           iRv = idx("RV shipment"), iOnsite = idx("Onsite date"), iF601 = idx("601F"),
           iLwCode = idx("รหัสสถานะ (Last week)"), iLwDetail = idx("รายละเอียด (Last week)"),
           iTwCode = idx("รหัสสถานะ (This week)"), iTwDetail = idx("รายละเอียด (This week)");
+    // "Plan" (Have plan / No plan): match by header name first; if not found, fall back to
+    // column G (index 6) since that's where it sits in this template's own exported CSV layout.
+    let iPlan = idx("Plan");
+    if (iPlan < 0 && headers.length > 6) iPlan = 6;
 
     if (iWbs < 0 && iTwCode < 0) {
         statusEl.style.color = "var(--rust)";
@@ -1284,7 +1289,7 @@ function processImportedCsvText(rawText, statusEl, btn){
           manager: iMgr >= 0 ? cells[iMgr] : "",
           co: iCo >= 0 ? cells[iCo] : "",
           subcon: iSub >= 0 ? cells[iSub] : "",
-          plan: (iPlan >= 0 && cells[iPlan]) ? cells[iPlan].trim() : "No plan",
+          plan: (iPlan >= 0 && (cells[iPlan] || "").trim().toLowerCase() === "have plan") ? "Have plan" : "No plan",
           payment: (iPay >= 0 && cells[iPay]) ? cells[iPay].trim() : "เงินผ่าน",
           rv: iRv >= 0 ? cells[iRv] : "",
           onsite: iOnsite >= 0 ? cells[iOnsite] : "",
