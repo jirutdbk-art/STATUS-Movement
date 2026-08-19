@@ -72,7 +72,7 @@
   @keyframes flowDash{ to{ stroke-dashoffset:-22; } }
   .movement-badge{ transform-box:fill-box; transform-origin:center; animation:badgePulse 1.3s ease-in-out infinite; }
   @keyframes badgePulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.18); } }
-  .active-plan-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
+  .active-plan-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
   .active-plan-box{ border:1px solid var(--rail-soft); border-radius:12px; padding:12px 14px; background:#fcfefd; overflow:hidden; }
   .active-plan-box-header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
   .active-plan-box-total{ font-family:var(--font-mono); font-weight:700; font-size:18px; color:var(--rail); }
@@ -85,6 +85,9 @@
   .active-plan-mgr-table tr.mgr-row:hover{ background:var(--rail-soft); }
   .active-plan-mgr-table tr.mgr-sub-row{ background:#fafaf9; }
   .active-plan-mgr-table tr.mgr-sub-row td{ padding-top:2px; padding-bottom:2px; font-size:11px; }
+  .active-plan-mgr-table tr.co-row td{ padding-top:2px; padding-bottom:2px; }
+  .active-plan-mgr-table tr.unit-row{ background:#f5f5f3; }
+  .active-plan-mgr-table tr.unit-row td{ padding-top:3px; padding-bottom:3px; border-bottom:1px dashed var(--line); }
   .mgr-caret{ display:inline-block; width:12px; color:var(--slate); font-size:9px; }
   .team-filter-row{ display:flex; gap:8px; align-items:center; margin:14px 0 18px; flex-wrap:wrap; }
   .team-pill{ font-family:var(--font-mono); font-size:12px; font-weight:700; padding:7px 16px; border-radius:999px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--ink); }
@@ -660,17 +663,41 @@ function renderActivePlanSummary(){
         const byCo = {};
         c.units.forEach(u => {
           const co = u.co && u.co.trim() ? u.co.trim() : "(ไม่ระบุ Co)";
-          if (!byCo[co]) byCo[co] = { have: 0, no: 0 };
+          if (!byCo[co]) byCo[co] = { have: 0, no: 0, units: [] };
           if (u.plan === "Have plan") byCo[co].have++; else byCo[co].no++;
+          byCo[co].units.push(u);
         });
         const subRows = Object.entries(byCo)
           .sort((a2, b2) => b2[1].no - a2[1].no)
-          .map(([co, cc]) => `<tr class="mgr-sub-row">
-              <td style="padding-left:20px;">${escapeHtml(co)}</td>
+          .map(([co, cc]) => {
+            const coKey = `${d.code}::${mgr}::${co}`;
+            const coOpen = expandedManagers.has(coKey);
+            const coRow = `<tr class="mgr-row co-row" data-key="${escapeHtml(coKey)}">
+              <td style="padding-left:20px;"><span class="mgr-caret">${coOpen ? "▾" : "▸"}</span>${escapeHtml(co)}</td>
               <td class="num" style="color:var(--rail);">${cc.have}</td>
               <td class="num" style="color:var(--rust);">${cc.no}</td>
               <td>${stackedBar(cc.have, cc.no)}</td>
-            </tr>`).join("");
+            </tr>`;
+            if (!coOpen) return coRow;
+            const unitRows = cc.units
+              .slice()
+              .sort((u1, u2) => (u1.plan === "Have plan" ? 1 : 0) - (u2.plan === "Have plan" ? 1 : 0))
+              .map(u => {
+                const isNoPlan = u.plan !== "Have plan";
+                const tone = isNoPlan ? "var(--rust)" : "var(--rail)";
+                return `<tr class="unit-row">
+                  <td colspan="4" style="padding-left:36px;">
+                    <div style="display:flex; justify-content:space-between; gap:6px; align-items:baseline;">
+                      <span style="font-size:11px; color:var(--ink);">${escapeHtml(u.project && u.project.trim() ? u.project.trim() : "(ไม่ระบุชื่อโปรเจค)")}
+                        <span style="font-family:var(--font-mono); font-size:9.5px; color:var(--slate);">${escapeHtml(u.wbs && u.wbs.trim() ? u.wbs.trim() : "—")}</span>
+                      </span>
+                      <span style="font-family:var(--font-mono); font-size:9.5px; font-weight:700; color:${tone}; white-space:nowrap;">${isNoPlan ? "No plan" : "Have plan"}</span>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join("");
+            return coRow + unitRows;
+          }).join("");
         return mainRow + subRows;
       })
       .join("");
