@@ -430,20 +430,30 @@ function renderFlowDiagram(agg){
     const fontSize = isSel ? 14.5 : (pos.w <= 62 ? 13 : 12.5);
     boxParts.push(`<text x="${cx(pos)}" y="${cy(pos)+1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-weight="700" font-size="${fontSize}" fill="${stroke}">${code}</text>`);
 
-    // Ring + count badge instead of a crossing arrow — no overlap no matter how many statuses are involved.
-    if (inflowMap[code]) {
-      boxParts.push(`<rect class="movement-arrow" x="${x-6}" y="${y-6}" width="${w+12}" height="${h+12}" rx="13" fill="none" stroke="var(--rail)" stroke-width="2"/>`);
-      boxParts.push(`<circle class="movement-badge" cx="${x+w+1}" cy="${y-1}" r="9.5" fill="var(--rail)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
-      boxParts.push(`<text x="${x+w+1}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#fff">${inflowMap[code]}</text>`);
-    }
-    if (outflowMap[code]) {
-      const ringPad = inflowMap[code] ? 10 : 6;
-      boxParts.push(`<rect class="movement-arrow" x="${x-ringPad}" y="${y-ringPad}" width="${w+ringPad*2}" height="${h+ringPad*2}" rx="${13+(ringPad-6)}" fill="none" stroke="var(--rust)" stroke-width="2"/>`);
-      boxParts.push(`<circle class="movement-badge" cx="${x+w+1}" cy="${y+h+1}" r="9.5" fill="var(--rust)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
-      boxParts.push(`<text x="${x+w+1}" y="${y+h+2}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#fff">${outflowMap[code]}</text>`);
-    }
     boxParts.push(`</g>`);
   });
+
+  // Merge every inflow line into a single green arrow entering the selected node from above,
+  // and every outflow line into a single red arrow leaving it from below.
+  if (selected && FLOW_LAYOUT[selected]) {
+    const selPos = FLOW_LAYOUT[selected];
+    const pad = 7;
+    const sy = selPos.y - pad, sh = selPos.h + pad * 2;
+    const totalInMerged = newInCount + Object.values(inflowMap).reduce((s, c) => s + c, 0);
+    const totalOutMerged = Object.values(outflowMap).reduce((s, c) => s + c, 0);
+    if (totalInMerged > 0) {
+      const topY = sy - 34, tipY = sy - 3;
+      movementParts.push(`<line class="movement-arrow" x1="${cx(selPos)}" y1="${topY}" x2="${cx(selPos)}" y2="${tipY}" stroke="var(--rail)" stroke-width="2.6" marker-end="url(#flowArrowGreen)"/>`);
+      movementParts.push(`<circle cx="${cx(selPos)}" cy="${topY-9}" r="10.5" fill="var(--rail)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
+      movementParts.push(`<text x="${cx(selPos)}" y="${topY-8}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">${totalInMerged}</text>`);
+    }
+    if (totalOutMerged > 0) {
+      const botY = sy + sh + 34, tipY = sy + sh + 3;
+      movementParts.push(`<line class="movement-arrow" x1="${cx(selPos)}" y1="${tipY}" x2="${cx(selPos)}" y2="${botY}" stroke="var(--rust)" stroke-width="2.6" marker-end="url(#flowArrowRust)"/>`);
+      movementParts.push(`<circle cx="${cx(selPos)}" cy="${botY+9}" r="10.5" fill="var(--rust)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
+      movementParts.push(`<text x="${cx(selPos)}" y="${botY+10}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">${totalOutMerged}</text>`);
+    }
+  }
 
   // ---- Permanent Input (into 9010) and Output (out of 5020, no 5030 box) indicators ----
   const permanentParts = [];
@@ -504,7 +514,7 @@ function renderFlowDiagram(agg){
   document.getElementById("flowSummaryText").innerHTML = summaryHtml;
 
   container.innerHTML = `
-    <svg width="100%" viewBox="-90 0 890 300" role="img" style="display:block;">
+    <svg width="100%" viewBox="-90 0 890 350" role="img" style="display:block;">
       <title>Active and inactive status flow with movement</title>
       <desc>Interactive status flow diagram showing active and inactive statuses with in/out movement when a status is selected</desc>
       <defs>
@@ -514,15 +524,15 @@ function renderFlowDiagram(agg){
         <marker id="flowArrowRust" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--rust)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
       </defs>
       ${structuralParts.join("")}
-      ${movementParts.join("")}
       ${boxParts.join("")}
+      ${movementParts.join("")}
       ${permanentParts.join("")}
-      <rect x="44" y="272" width="14" height="14" rx="3" fill="var(--rail)"/>
-      <text x="64" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Active / เข้า (In)</text>
-      <rect x="220" y="272" width="14" height="14" rx="3" fill="var(--rust)"/>
-      <text x="240" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Inactive / ออก (Out)</text>
-      <rect x="420" y="272" width="14" height="14" rx="3" fill="none" stroke="var(--amber)" stroke-width="2"/>
-      <text x="440" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">สถานะที่เลือก</text>
+      <rect x="44" y="322" width="14" height="14" rx="3" fill="var(--rail)"/>
+      <text x="64" y="333" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Active / เข้า (In)</text>
+      <rect x="220" y="322" width="14" height="14" rx="3" fill="var(--rust)"/>
+      <text x="240" y="333" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Inactive / ออก (Out)</text>
+      <rect x="420" y="322" width="14" height="14" rx="3" fill="none" stroke="var(--amber)" stroke-width="2"/>
+      <text x="440" y="333" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">สถานะที่เลือก</text>
       <text x="44" y="16" font-family="var(--font-mono)" font-weight="800" font-size="13" fill="var(--ink)">12</text>
       <text x="62" y="16" font-family="var(--font-mono)" font-size="9.5" fill="var(--slate)" opacity="0.6">7</text>
       <text x="76" y="16" font-family="var(--font-mono)" font-size="10" fill="var(--slate)">= This week (ใหญ่/เข้ม) · Last week (เล็ก/จาง)</text>
