@@ -72,6 +72,18 @@
   @keyframes flowDash{ to{ stroke-dashoffset:-22; } }
   .movement-badge{ transform-box:fill-box; transform-origin:center; animation:badgePulse 1.3s ease-in-out infinite; }
   @keyframes badgePulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.18); } }
+  .movement-funnel{ display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; }
+  .funnel-col{ flex:1 1 200px; min-width:180px; display:flex; flex-direction:column; gap:6px; }
+  .funnel-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 10px; border-radius:0 8px 8px 0; background:var(--paper); }
+  .funnel-item-name{ font-size:12px; color:var(--ink); }
+  .funnel-item-count{ font-family:var(--font-mono); font-weight:700; font-size:13px; flex-shrink:0; }
+  .funnel-arrow{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; padding:0 4px; min-width:52px; }
+  .funnel-arrow-count{ font-family:var(--font-mono); font-weight:800; font-size:20px; line-height:1; }
+  .funnel-arrow-glyph{ font-size:22px; line-height:1; margin:2px 0; }
+  .funnel-arrow-caption{ font-family:var(--font-mono); font-size:9.5px; color:var(--slate); text-transform:uppercase; letter-spacing:.04em; }
+  .funnel-center{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:14px 18px; border-radius:14px; border:2px solid var(--amber); background:#FFFBEF; min-width:150px; text-align:center; }
+  .funnel-center-name{ font-family:var(--font-display); font-weight:700; font-size:13px; color:var(--ink); }
+  .funnel-center-stats{ font-family:var(--font-mono); font-size:10.5px; color:var(--slate); }
   .active-plan-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
   .active-plan-box{ border:1px solid var(--rail-soft); border-radius:12px; padding:12px 14px; background:#fcfefd; overflow:hidden; }
   .active-plan-box-header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
@@ -401,8 +413,8 @@ function renderFlowDiagram(agg){
   if (totalActiveEl) totalActiveEl.textContent = a.totalActive;
   if (totalInactiveEl) totalInactiveEl.textContent = a.totalInactive;
 
-  // Compute movement (in/out) for the selected status up front so we can
-  // highlight the related nodes directly instead of drawing crossing arrows.
+  // Compute movement (in/out) for the selected status — used by the funnel panel below,
+  // and just to know which nodes to softly highlight on the pipeline itself.
   let inflowMap = {}, outflowMap = {}, newInCount = 0;
   if (selected && FLOW_LAYOUT[selected]) {
     const { inflow, outflow } = computeMovementDetail(selected);
@@ -413,47 +425,26 @@ function renderFlowDiagram(agg){
   Object.entries(FLOW_LAYOUT).forEach(([code, pos]) => {
     const def = defByCode[code];
     const isSel = code === selected;
+    const isRelated = inflowMap[code] || outflowMap[code];
     const pad = isSel ? 7 : 0;
     const x = pos.x - pad, y = pos.y - pad, w = pos.w + pad * 2, h = pos.h + pad * 2;
     const fill = def.active ? "var(--rail-soft)" : "var(--rust-soft)";
     const stroke = def.active ? "var(--rail)" : "var(--rust)";
     const strokeW = isSel ? 3 : 1.5;
-    const boxOpacity = selected ? (isSel || inflowMap[code] || outflowMap[code] ? 1 : 0.35) : 1;
+    const boxOpacity = selected ? (isSel || isRelated ? 1 : 0.3) : 1;
     const thisCount = a.thisByCode[code] || 0;
     const lastCount = a.lastByCode[code] || 0;
     const countY = y - 9;
     boxParts.push(`<g opacity="${boxOpacity}">`);
     boxParts.push(`<text x="${cx(pos)-4}" y="${countY}" text-anchor="end" font-family="var(--font-mono)" font-weight="800" font-size="${isSel?17:14}" fill="var(--ink)">${thisCount}</text>`);
     boxParts.push(`<text x="${cx(pos)+4}" y="${countY}" text-anchor="start" font-family="var(--font-mono)" font-weight="500" font-size="9.5" fill="var(--slate)" opacity="0.6">${lastCount}</text>`);
-    if (isSel) boxParts.push(`<rect x="${x-4}" y="${y-4}" width="${w+8}" height="${h+8}" rx="12" fill="none" stroke="var(--amber)" stroke-width="2"/>`);
+    if (isSel) boxParts.push(`<rect x="${x-4}" y="${y-4}" width="${w+8}" height="${h+8}" rx="12" fill="none" stroke="var(--amber)" stroke-width="2.5"/>`);
+    else if (isRelated) boxParts.push(`<rect x="${x-3}" y="${y-3}" width="${w+6}" height="${h+6}" rx="10" fill="none" stroke="${inflowMap[code] ? "var(--rail)" : "var(--rust)"}" stroke-width="1.5" stroke-dasharray="3 3"/>`);
     boxParts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`);
     const fontSize = isSel ? 14.5 : (pos.w <= 62 ? 13 : 12.5);
     boxParts.push(`<text x="${cx(pos)}" y="${cy(pos)+1}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-weight="700" font-size="${fontSize}" fill="${stroke}">${code}</text>`);
-
     boxParts.push(`</g>`);
   });
-
-  // Merge every inflow line into a single green arrow entering the selected node from above,
-  // and every outflow line into a single red arrow leaving it from below.
-  if (selected && FLOW_LAYOUT[selected]) {
-    const selPos = FLOW_LAYOUT[selected];
-    const pad = 7;
-    const sy = selPos.y - pad, sh = selPos.h + pad * 2;
-    const totalInMerged = newInCount + Object.values(inflowMap).reduce((s, c) => s + c, 0);
-    const totalOutMerged = Object.values(outflowMap).reduce((s, c) => s + c, 0);
-    if (totalInMerged > 0) {
-      const topY = sy - 34, tipY = sy - 3;
-      movementParts.push(`<line class="movement-arrow" x1="${cx(selPos)}" y1="${topY}" x2="${cx(selPos)}" y2="${tipY}" stroke="var(--rail)" stroke-width="2.6" marker-end="url(#flowArrowGreen)"/>`);
-      movementParts.push(`<circle cx="${cx(selPos)}" cy="${topY-9}" r="10.5" fill="var(--rail)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
-      movementParts.push(`<text x="${cx(selPos)}" y="${topY-8}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">${totalInMerged}</text>`);
-    }
-    if (totalOutMerged > 0) {
-      const botY = sy + sh + 34, tipY = sy + sh + 3;
-      movementParts.push(`<line class="movement-arrow" x1="${cx(selPos)}" y1="${tipY}" x2="${cx(selPos)}" y2="${botY}" stroke="var(--rust)" stroke-width="2.6" marker-end="url(#flowArrowRust)"/>`);
-      movementParts.push(`<circle cx="${cx(selPos)}" cy="${botY+9}" r="10.5" fill="var(--rust)" stroke="var(--paper-raised)" stroke-width="1.5"/>`);
-      movementParts.push(`<text x="${cx(selPos)}" y="${botY+10}" text-anchor="middle" dominant-baseline="central" font-family="var(--font-mono)" font-size="10.5" font-weight="700" fill="#fff">${totalOutMerged}</text>`);
-    }
-  }
 
   // ---- Permanent Input (into 9010) and Output (out of 5020, no 5030 box) indicators ----
   const permanentParts = [];
@@ -476,36 +467,48 @@ function renderFlowDiagram(agg){
 
   let summaryHtml = "";
   if (selected && FLOW_LAYOUT[selected]) {
+    const def = defByCode[selected];
     const inEntries = Object.entries(inflowMap).sort((a2, b2) => b2[1] - a2[1]);
     const outEntries = Object.entries(outflowMap).sort((a2, b2) => b2[1] - a2[1]);
     const totalIn = inEntries.reduce((s, [,c]) => s + c, 0) + newInCount;
     const totalOut = outEntries.reduce((s, [,c]) => s + c, 0);
-    const maxSide = Math.max(1, newInCount, ...inEntries.map(e => e[1]), ...outEntries.map(e => e[1]));
-    const listRow = (label, count, tone) => `
-      <div style="display:flex; align-items:center; gap:8px; padding:3px 0;">
-        <span style="flex:0 0 auto; min-width:120px; font-size:12px; color:var(--ink);">${label}</span>
-        <span style="flex:1; height:7px; border-radius:4px; background:var(--paper); overflow:hidden;">
-          <span style="display:block; height:100%; width:${Math.round((count / maxSide) * 100)}%; background:${tone};"></span>
-        </span>
-        <span style="flex:0 0 30px; text-align:right; font-family:var(--font-mono); font-weight:700; font-size:12px; color:${tone};">${count}</span>
+
+    const funnelItem = (label, count, tone) => `
+      <div class="funnel-item" style="border-left:3px solid ${tone};">
+        <span class="funnel-item-name">${label}</span>
+        <span class="funnel-item-count" style="color:${tone};">${count}</span>
       </div>`;
-    let inRows = newInCount ? listRow("ใหม่ (ไม่มีสถานะเดิม)", newInCount, "var(--rail)") : "";
-    inRows += inEntries.map(([src, c]) => listRow(flowLabel(src), c, "var(--rail)")).join("");
-    if (!inRows) inRows = `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
-    const outRows = outEntries.length
-      ? outEntries.map(([dst, c]) => listRow(flowLabel(dst), c, "var(--rust)")).join("")
-      : `<p class="chart-empty-hint" style="margin:2px 0;">ไม่มี</p>`;
+    let inItems = newInCount ? funnelItem("ใหม่ (ไม่มีสถานะเดิม)", newInCount, "var(--rail)") : "";
+    inItems += inEntries.map(([src, c]) => funnelItem(flowLabel(src), c, "var(--rail)")).join("");
+    if (!inItems) inItems = `<p class="chart-empty-hint" style="margin:4px 0;">ไม่มี</p>`;
+    const outItems = outEntries.length
+      ? outEntries.map(([dst, c]) => funnelItem(flowLabel(dst), c, "var(--rust)")).join("")
+      : `<p class="chart-empty-hint" style="margin:4px 0;">ไม่มี</p>`;
 
     summaryHtml = `
-      <div style="font-size:13px; margin-bottom:10px;">สถานะ <b>${selected} · ${defByCode[selected].name}</b> — วงแหวนเขียวรอบกล่อง = สถานะที่มีการเข้ามา · วงแหวนแดง = สถานะที่ไหลออกไป (ตัวเลขในวงกลมคือจำนวน)</div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:16px;">
-        <div>
-          <div class="eyebrow" style="color:var(--rail); margin-bottom:4px;">เข้า (In) รวม ${totalIn} — มาจาก</div>
-          ${inRows}
+      <div class="movement-funnel">
+        <div class="funnel-col">
+          <div class="eyebrow" style="color:var(--rail); margin-bottom:6px;">มาจาก (Sources)</div>
+          ${inItems}
         </div>
-        <div>
-          <div class="eyebrow" style="color:var(--rust); margin-bottom:4px;">ออก (Out) รวม ${totalOut} — ไปยัง</div>
-          ${outRows}
+        <div class="funnel-arrow">
+          <div class="funnel-arrow-count" style="color:var(--rail);">${totalIn}</div>
+          <div class="funnel-arrow-glyph" style="color:var(--rail);">➜</div>
+          <div class="funnel-arrow-caption">เข้า</div>
+        </div>
+        <div class="funnel-center">
+          <span class="code-pill" style="font-size:13px; padding:3px 10px;">${selected}</span>
+          <div class="funnel-center-name">${def.name}</div>
+          <div class="funnel-center-stats">This week <b>${a.thisByCode[selected]||0}</b> · Last week <b>${a.lastByCode[selected]||0}</b></div>
+        </div>
+        <div class="funnel-arrow">
+          <div class="funnel-arrow-count" style="color:var(--rust);">${totalOut}</div>
+          <div class="funnel-arrow-glyph" style="color:var(--rust);">➜</div>
+          <div class="funnel-arrow-caption">ออก</div>
+        </div>
+        <div class="funnel-col">
+          <div class="eyebrow" style="color:var(--rust); margin-bottom:6px;">ไปยัง (Destinations)</div>
+          ${outItems}
         </div>
       </div>`;
   } else {
@@ -514,7 +517,7 @@ function renderFlowDiagram(agg){
   document.getElementById("flowSummaryText").innerHTML = summaryHtml;
 
   container.innerHTML = `
-    <svg width="100%" viewBox="-90 0 890 350" role="img" style="display:block;">
+    <svg width="100%" viewBox="-90 0 890 300" role="img" style="display:block;">
       <title>Active and inactive status flow with movement</title>
       <desc>Interactive status flow diagram showing active and inactive statuses with in/out movement when a status is selected</desc>
       <defs>
@@ -527,12 +530,16 @@ function renderFlowDiagram(agg){
       ${boxParts.join("")}
       ${movementParts.join("")}
       ${permanentParts.join("")}
-      <rect x="44" y="322" width="14" height="14" rx="3" fill="var(--rail)"/>
-      <text x="64" y="333" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Active / เข้า (In)</text>
-      <rect x="220" y="322" width="14" height="14" rx="3" fill="var(--rust)"/>
-      <text x="240" y="333" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Inactive / ออก (Out)</text>
-      <rect x="420" y="322" width="14" height="14" rx="3" fill="none" stroke="var(--amber)" stroke-width="2"/>
-      <text x="440" y="333" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">สถานะที่เลือก</text>
+      <rect x="44" y="272" width="14" height="14" rx="3" fill="var(--rail)"/>
+      <text x="64" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Active</text>
+      <rect x="150" y="272" width="14" height="14" rx="3" fill="var(--rust)"/>
+      <text x="170" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">Inactive</text>
+      <rect x="280" y="272" width="14" height="14" rx="3" fill="none" stroke="var(--amber)" stroke-width="2.5"/>
+      <text x="300" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">สถานะที่เลือก</text>
+      <rect x="430" y="272" width="14" height="14" rx="3" fill="none" stroke="var(--rail)" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <text x="450" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">มีของเข้า</text>
+      <rect x="560" y="272" width="14" height="14" rx="3" fill="none" stroke="var(--rust)" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <text x="580" y="283" font-family="var(--font-mono)" font-size="11" fill="var(--slate)">มีของออก</text>
       <text x="44" y="16" font-family="var(--font-mono)" font-weight="800" font-size="13" fill="var(--ink)">12</text>
       <text x="62" y="16" font-family="var(--font-mono)" font-size="9.5" fill="var(--slate)" opacity="0.6">7</text>
       <text x="76" y="16" font-family="var(--font-mono)" font-size="10" fill="var(--slate)">= This week (ใหญ่/เข้ม) · Last week (เล็ก/จาง)</text>
